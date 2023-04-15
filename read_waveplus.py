@@ -2,8 +2,10 @@ import struct
 import sys
 import time
 from datetime import datetime
+from typing import Optional
 
-from bluepy.btle import UUID, BTLEDisconnectError, DefaultDelegate, Peripheral, Scanner
+from bluepy.btle import (UUID, BTLEDisconnectError, Characteristic,
+                         DefaultDelegate, Peripheral, Scanner)
 from icecream import ic
 
 
@@ -37,57 +39,47 @@ def parseSerialNumber(ManuDataHexStr):
     return SN
 
 
-# ===============================
-# Class WavePlus
-# ===============================
+def get_peripheral(macAddr: str) -> Peripheral:
+    print(f"MacAddr {macAddr}")
+    periph = None
+    while periph is None:
+        try:
+            periph = Peripheral(macAddr)
+        except BTLEDisconnectError as e:
+            print(f"BTLEDisconnectError {e}")
+            print("get_peripheral: Retrying in 10 seconds")
+            time.sleep(10)
+    print(f"Peripheral {periph}")
+    return periph
 
 
-class WavePlus:
-    def __init__(self, SerialNumber):
-        self.periph = None
-        self.curr_val_char = None
-        self.MacAddr = "58:93:d8:8b:12:2a"
-        self.SN = SerialNumber
-        self.uuid = UUID("b42e2a68-ade7-11e4-89d3-123b93f75cba")
+def get_characteristics(periph: Peripheral, uuid: UUID) -> Characteristic:
+    charectoristics = periph.getCharacteristics(uuid=uuid)
+    for char in charectoristics:
+        print(f"char {char}")
 
-    def connect(self):
-        print(f"MacAddr {self.MacAddr}")
-        scanner = Scanner().withDelegate(DefaultDelegate())
-        devices = scanner.scan(10)  # 0.1 seconds scan period
-        print(f"devices {len(devices)}")
-        for dev in devices:
-            ManuData = dev.getValueText(255)
-            print(f"{dev} {ManuData}")
-            SN = parseSerialNumber(ManuData)
-            if SN == self.SN:
-                print(f"matched {dev.addr}")
-                self.MacAddr = (
-                    dev.addr
-                )  # exits the while loop on next conditional check
-                break  # exit for loop
-            else:
-                print(f"not matched {dev.addr}")
+    curr_val_char = charectoristics[0]
+    return curr_val_char
 
-        while self.periph is None:
-            try:
-                self.periph = Peripheral(self.MacAddr)
-            except BTLEDisconnectError as e:
-                print(f"Peripheral {e}")
-                time.sleep(10)
-        print(f"Peripheral {self.periph}")
 
-        charectoristics = self.periph.getCharacteristics(uuid=self.uuid)
-        for char in charectoristics:
-            print(f"char {char}")
+def scan_for_sn(serial_number) -> Optional[str]:
+    scanner = Scanner().withDelegate(DefaultDelegate())
+    devices = scanner.scan(10)  # 0.1 seconds scan period
+    print(f"devices {len(devices)}")
+    for dev in devices:
+        ManuData = dev.getValueText(255)
+        print(f"{dev} {ManuData}")
+        serial_number = parseSerialNumber(ManuData)
+        if serial_number == serial_number:
+            print(f"matched {dev.addr}")
+            return dev.addr
+        else:
+            print(f"not matched {dev.addr}")
+            return None
 
-        curr_val_char = charectoristics[0]
-        return curr_val_char
 
-    def disconnect(self):
-        if self.periph is not None:
-            self.periph.disconnect()
-            self.periph = None
-            self.curr_val_char = None
+def disconnect(periph):
+    periph.disconnect()
 
 
 def conv2radon(radon_raw):
@@ -156,54 +148,61 @@ def main():
     SerialNumber = int(sys.argv[1])
     SamplePeriod = int(sys.argv[2])
 
-    waveplus = WavePlus(SerialNumber)
-
     print("Device serial number: %s" % (SerialNumber))
+    MacAddr = "58:93:d8:8b:12:2a"
 
-    cvc = waveplus.connect()
+    perif: Peripheral = get_peripheral(MacAddr)
+    uuid = UUID("b42e2a68-ade7-11e4-89d3-123b93f75cba")
+    cvc: Characteristic = get_characteristics(perif, uuid)
     while True:
         print(f"cvc type{type(cvc)} {cvc}")
-
         # read values
         sensors = read(cvc)
-
-        humidity = f"{sensors.getValue(SENSOR_IDX_HUMIDITY)} {sensors.getUnit(SENSOR_IDX_HUMIDITY)}"
-        radon_st_avg = f"{sensors.getValue(SENSOR_IDX_RADON_SHORT_TERM_AVG)} {sensors.getUnit(SENSOR_IDX_RADON_SHORT_TERM_AVG)}"
-        radon_lt_avg = f"{sensors.getValue(SENSOR_IDX_RADON_LONG_TERM_AVG)} {sensors.getUnit(SENSOR_IDX_RADON_LONG_TERM_AVG)}"
-        temperature = f"{c2f(sensors.getValue(SENSOR_IDX_TEMPERATURE))}f"
-        pressure = f"{sensors.getValue(SENSOR_IDX_REL_ATM_PRESSURE)} {sensors.getUnit(SENSOR_IDX_REL_ATM_PRESSURE)}"
-        CO2_lvl = f"{sensors.getValue(SENSOR_IDX_CO2_LVL)} {sensors.getUnit(SENSOR_IDX_CO2_LVL)}"
-        VOC_lvl = f"{sensors.getValue(SENSOR_IDX_VOC_LVL)} {sensors.getUnit(SENSOR_IDX_VOC_LVL)}"
-        curtime = datetime.now().strftime("%H:%M:%S")
-        # Print data
-        header = [
-            "Humidity",
-            "Radon ST avg",
-            "Radon LT avg",
-            "Temperature",
-            "Pressure",
-            "CO2 level",
-            "VOC level",
-            "time",
-        ]
-
-        print(header)
-
-        data = [
-            humidity,
-            radon_st_avg,
-            radon_lt_avg,
-            temperature,
-            pressure,
-            CO2_lvl,
-            VOC_lvl,
-            curtime,
-        ]
-
-        for h, d in zip(header, data, strict=True):
-            ic(f"{h}: {d}")
+        handle_sensor_values(sensors)
         print(f"sleeping for {SamplePeriod} seconds")
         time.sleep(SamplePeriod)
+
+
+def handle_sensor_values(sensors):
+    humidity = f"{sensors.getValue(SENSOR_IDX_HUMIDITY)} {sensors.getUnit(SENSOR_IDX_HUMIDITY)}"
+    radon_st_avg = f"{sensors.getValue(SENSOR_IDX_RADON_SHORT_TERM_AVG)} {sensors.getUnit(SENSOR_IDX_RADON_SHORT_TERM_AVG)}"
+    radon_lt_avg = f"{sensors.getValue(SENSOR_IDX_RADON_LONG_TERM_AVG)} {sensors.getUnit(SENSOR_IDX_RADON_LONG_TERM_AVG)}"
+    temperature = f"{c2f(sensors.getValue(SENSOR_IDX_TEMPERATURE))}f"
+    pressure = f"{sensors.getValue(SENSOR_IDX_REL_ATM_PRESSURE)} {sensors.getUnit(SENSOR_IDX_REL_ATM_PRESSURE)}"
+    CO2_lvl = (
+        f"{sensors.getValue(SENSOR_IDX_CO2_LVL)} {sensors.getUnit(SENSOR_IDX_CO2_LVL)}"
+    )
+    VOC_lvl = (
+        f"{sensors.getValue(SENSOR_IDX_VOC_LVL)} {sensors.getUnit(SENSOR_IDX_VOC_LVL)}"
+    )
+    curtime = datetime.now().strftime("%H:%M:%S")
+    # Print data
+    header = [
+        "Humidity",
+        "Radon ST avg",
+        "Radon LT avg",
+        "Temperature",
+        "Pressure",
+        "CO2 level",
+        "VOC level",
+        "time",
+    ]
+
+    print(header)
+
+    data = [
+        humidity,
+        radon_st_avg,
+        radon_lt_avg,
+        temperature,
+        pressure,
+        CO2_lvl,
+        VOC_lvl,
+        curtime,
+    ]
+
+    for h, d in zip(header, data, strict=True):
+        ic(f"{h}: {d}")
 
 
 if __name__ == "__main__":
