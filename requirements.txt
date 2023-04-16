@@ -1,2 +1,4 @@
 bluepy
-tableprint
+icecream
+lxml
+requests
