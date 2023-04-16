@@ -46,7 +46,7 @@ def read_waveplus_json():
 def read_weather_json():
     """weather.json example :
 
-    {"weather_date": "2023-04-15 10:21", "temperature": 57.3,
+    {"date": "2023-04-15 10:21", "temperature": 57.3,
     "humidity": 35, "dewpoint": 29.9, "wind": null, "barometer": 29.988,
     "today_rain": 0.0, "yearly_rain": 1.32, "wind_chill": 57.3, "thw_index":
      54.4, "heat_index": 54.4}
