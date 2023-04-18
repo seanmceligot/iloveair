@@ -1,9 +1,26 @@
+notify: 
+	cargo check
+	cargo build
+	RUST_BACKTRACE=1 cargo run --bin weather_notify
+
 weather:
-	python python/local_weather.py
+	cargo check
+	RUST_BACKTRACE=1 cargo run --bin getweather
 
 air: 
 	python python/read_waveplus.py
 
-notify:
-	python python/weather_notify.py
 
+all: weather air notify
+
+install_service:
+	systemctl --user daemon-reload
+	systemctl --user enable --now iloveair.timer
+	systemctl --user enable --now iloveair.service 
+
+journalctl:
+	journalctl --user -u iloveair.service
+
+status:
+	systemctl --user status iloveair.service
+	systemctl --user status iloveair.timer

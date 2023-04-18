@@ -2,16 +2,10 @@ import json
 import struct
 import time
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, Optional
 
-from bluepy.btle import (
-    UUID,
-    BTLEDisconnectError,
-    Characteristic,
-    DefaultDelegate,
-    Peripheral,
-    Scanner,
-)
+from bluepy.btle import (UUID, BTLEDisconnectError, Characteristic,
+                         DefaultDelegate, Peripheral, Scanner)
 from icecream import ic
 
 
@@ -172,54 +166,53 @@ def main():
 
 
 def handle_sensor_values(sensors):
-    humidity = f"{sensors.getValue(SENSOR_IDX_HUMIDITY)} {sensors.getUnit(SENSOR_IDX_HUMIDITY)}"
-    radon_st_avg = f"{sensors.getValue(SENSOR_IDX_RADON_SHORT_TERM_AVG)} {sensors.getUnit(SENSOR_IDX_RADON_SHORT_TERM_AVG)}"
-    radon_lt_avg = f"{sensors.getValue(SENSOR_IDX_RADON_LONG_TERM_AVG)} {sensors.getUnit(SENSOR_IDX_RADON_LONG_TERM_AVG)}"
-    temperature = f"{c2f(sensors.getValue(SENSOR_IDX_TEMPERATURE))} {sensors.getUnit(SENSOR_IDX_TEMPERATURE)}"
-    pressure = f"{sensors.getValue(SENSOR_IDX_REL_ATM_PRESSURE)} {sensors.getUnit(SENSOR_IDX_REL_ATM_PRESSURE)}"
-    CO2_lvl = (
-        f"{sensors.getValue(SENSOR_IDX_CO2_LVL)} {sensors.getUnit(SENSOR_IDX_CO2_LVL)}"
+    humidity = (
+        sensors.getValue(SENSOR_IDX_HUMIDITY),
+        sensors.getUnit(SENSOR_IDX_HUMIDITY),
     )
-    VOC_lvl = (
-        f"{sensors.getValue(SENSOR_IDX_VOC_LVL)} {sensors.getUnit(SENSOR_IDX_VOC_LVL)}"
+    radon_st_avg = (
+        sensors.getValue(SENSOR_IDX_RADON_SHORT_TERM_AVG),
+        sensors.getUnit(SENSOR_IDX_RADON_SHORT_TERM_AVG),
     )
-    curtime = datetime.now().strftime("%H:%M:%S")
-    # Print data
-    header = [
-        "date",
-        "Humidity",
-        "Radon ST avg",
-        "Radon LT avg",
-        "Temperature",
-        "Pressure",
-        "CO2 level",
-        "VOC level",
-        "time",
-    ]
+    radon_lt_avg = (
+        sensors.getValue(SENSOR_IDX_RADON_LONG_TERM_AVG),
+        sensors.getUnit(SENSOR_IDX_RADON_LONG_TERM_AVG),
+    )
+    temperature = (
+        c2f(sensors.getValue(SENSOR_IDX_TEMPERATURE)),
+        sensors.getUnit(SENSOR_IDX_TEMPERATURE),
+    )
+    pressure = (
+        sensors.getValue(SENSOR_IDX_REL_ATM_PRESSURE),
+        sensors.getUnit(SENSOR_IDX_REL_ATM_PRESSURE),
+    )
+    cO2_lvl = (
+        sensors.getValue(SENSOR_IDX_CO2_LVL),
+        sensors.getUnit(SENSOR_IDX_CO2_LVL),
+    )
+    vOC_lvl = (
+        sensors.getValue(SENSOR_IDX_VOC_LVL),
+        sensors.getUnit(SENSOR_IDX_VOC_LVL),
+    )
+    reading_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+    data = {}
+    data["date"] = {"val": reading_date, "unit": "%Y-%m-%d %H:%M"}
+    data["humidity"] = {"val": humidity[0], "unit": humidity[1]}
+    data["radon_st_avg"] = {"val": radon_st_avg[0], "unit": radon_st_avg[1]}
+    data["radon_lt_avg"] = {"val": radon_lt_avg[0], "unit": radon_lt_avg[1]}
+    data["temperature"] = {"val": temperature[0], "unit": temperature[1]}
+    data["pressure"] = {"val": pressure[0], "unit": pressure[1]}
+    data["co2"] = {"val": cO2_lvl[0], "unit": cO2_lvl[1]}
+    data["voc"] = {"val": vOC_lvl[0], "unit": vOC_lvl[1]}
+    ic(data)
+    print(json.dumps(data, indent=2))
 
-    print(header)
-
-    reading_date = now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    data = [
-        reading_date,
-        humidity,
-        radon_st_avg,
-        radon_lt_avg,
-        temperature,
-        pressure,
-        CO2_lvl,
-        VOC_lvl,
-        curtime,
-    ]
-
-    for h, d in zip(header, data, strict=True):
-        ic(f"{h}: {d}")
-    save_to_json("waveplus.json", header, data)
+    save_to_json("/home/sean/.cache/iloveair/waveplus.json", data)
 
 
-def save_to_json(filename: str, header: List[str], data: List[str]) -> None:
+def save_to_json(filename: str, data: Dict[str, Any]):
     with open(filename, "w") as f:
-        json.dump(dict(zip(header, data, strict=True)), f)
+        json.dump(data, f, indent=2)
 
 
 if __name__ == "__main__":
