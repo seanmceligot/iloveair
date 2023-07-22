@@ -10,6 +10,8 @@ weather:
 air: 
 	python python/read_waveplus.py
 
+pol:
+	cargo run --bin getpollution
 
 all: weather air notify
 
@@ -24,3 +26,6 @@ journalctl:
 status:
 	systemctl --user status iloveair.service
 	systemctl --user status iloveair.timer
+
+backup:
+	git bundle create /drive/bundles/iloveair.bunde --all

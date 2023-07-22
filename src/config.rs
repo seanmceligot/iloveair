@@ -8,6 +8,8 @@ pub struct WeatherConfig {
     pub api_key: String,
     pub city: String,
     pub country: String,
+    pub latitude: String,
+    pub longitude: String,
 }
 const PUSHOVER_FILE: &str = "/home/sean/.config/iloveair/pushover.json";
 const INDOOR_FILE: &str = "/home/sean/.cache/iloveair/waveplus.json";
