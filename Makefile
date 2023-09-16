@@ -12,6 +12,14 @@ all: check weather airapi pol dryrun
 
 check:
 	cargo check
+	cargo clippy
+
+
+test: check
+	cargo test
+
+list_air:
+	RUST_BACKTRACE=1 cargo run --bin read_waveplus -- --list-devices --config $(CONFIG_AIRTHINGS) --indoor $(CACHE_INDOOR) --token $(CACHE_TOKEN)
 
 airapi:
 	RUST_BACKTRACE=1 cargo run --bin read_waveplus -- --config $(CONFIG_AIRTHINGS) --indoor $(CACHE_INDOOR) --token $(CACHE_TOKEN)

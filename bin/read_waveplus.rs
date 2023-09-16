@@ -8,7 +8,6 @@ use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, OpenOptions};
-use std::io::Write;
 use std::path::Path;
 
 #[derive(Serialize, Deserialize)]
@@ -131,6 +130,13 @@ async fn main() {
                 .value_name("FILE")
                 .required(true)
                 .help("config ~/.cache/iloveair/airthings_token.json"),
+        )
+        .arg(
+            Arg::new("list_devices")
+                .long("list-devices")
+                .required(false)
+                .num_args(0)
+                .help("list devices instead of downloading data"),
         );
     let matches = command.get_matches();
 
@@ -148,11 +154,13 @@ async fn main() {
         // this else block is unreachable because the argument is required.
         unreachable!();
     };
+    let do_list_devices = matches.get_flag("list_devices");
 
     match app_main(
         airthings_config_path,
         indoor_cache_path,
         airthings_token_cache_path,
+        do_list_devices,
     )
     .await
     {
@@ -215,6 +223,7 @@ async fn app_main(
     airthings_config_json_path: &String,
     indoor_json_cache_path: &String,
     airthings_token_cache_path: &String,
+    do_list_devices: bool,
 ) -> Result<()> {
     let config = read_airthings_config(airthings_config_json_path).map_err(|e| {
         anyhow!(format!(
@@ -222,9 +231,14 @@ async fn app_main(
             airthings_config_json_path, e
         ))
     })?;
-    //let update_no_more_than_minutes = 10;
-    //if file_modified_in_last_minutes(indoor_json_path, update_no_more_than_minutes) {
-    //    println!("less than {} minutes old", update_no_more_than_minutes);
+    let update_no_more_than_minutes = 10;
+    if file_modified_in_last_minutes(indoor_json_cache_path, update_no_more_than_minutes) {
+        println!(
+            "SKIPPING: {} less than {} minutes old",
+            indoor_json_cache_path, update_no_more_than_minutes
+        );
+        return Ok(());
+    }
     let access_token = if let Some(access_token) = read_json_token(airthings_token_cache_path) {
         access_token
     } else {
@@ -237,9 +251,14 @@ async fn app_main(
             .map_err(|e| anyhow!(format!("write failed {} {}", airthings_token_cache_path, e)))?;
         access_token
     };
-    //list_devices(&json_token)
-    //    .await
-    //    .map_err(|e| anyhow!(format!("list_devices {}", e)))?;
+
+    if do_list_devices {
+        list_devices(&access_token)
+            .await
+            .map_err(|e| anyhow!(format!("list_devices {}", e)))?;
+        return Ok(());
+    }
+
     let device_id = config.device_id;
     let sample = get_latest_reading(&device_id, &access_token)
         .await
@@ -250,8 +269,9 @@ async fn app_main(
 
 async fn list_devices(token: &AccessToken) -> Result<()> {
     let client = reqwest::Client::new();
+    let url = "https://ext-api.airthings.com/v1/devices";
     let text = client
-        .get("https://ext-api.airthings.com/v1/devices") // assuming this is the correct endpoint
+        .get(url) // assuming this is the correct endpoint
         .bearer_auth(&token.access_token) // set the authorization header
         .send()
         .await
@@ -259,18 +279,22 @@ async fn list_devices(token: &AccessToken) -> Result<()> {
         .text()
         .await
         .map_err(|e| anyhow!(format!("list devices {}", e)))?;
-    println!("devices: {}", text);
+    let json: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("list_devices: could not parse devices {}", text))?;
+
+    println!("{}", serde_json::to_string_pretty(&json).unwrap());
     Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct SampleData {
     battery: u8,
     humidity: f64,
-    radonShortTermAvg: f64,
+    radon_short_term_avg: f64,
     temp: f64,
-    time: u64, // Assuming this is a UNIX timestamp
-    relayDeviceType: String,
+    time: u64,
+    relay_device_type: String,
 }
 #[derive(Deserialize)]
 struct SampleDataKey {

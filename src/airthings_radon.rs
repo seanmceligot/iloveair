@@ -4,13 +4,14 @@ extern crate serde_json;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Indoor {
     battery: i32,
     pub humidity: f64,
-    radonShortTermAvg: f64,
+    radon_short_term_avg: f64,
     pub temp: f64,
     time: i64,
-    relayDeviceType: String,
+    relay_device_type: String,
 }
 pub fn celsius_to_fahrenheit(celsius: f64) -> f64 {
     celsius * 9.0 / 5.0 + 32.0

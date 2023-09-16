@@ -100,7 +100,7 @@ fn app_main(config_file: &String, maybe_weather_json_path: Option<&String>) -> R
         city_name, country_code, api_key
     );
 
-    let response = reqwest::blocking::get(&url)?.json::<serde_json::Value>()?;
+    let response = reqwest::blocking::get(url)?.json::<serde_json::Value>()?;
     save_weather_response(maybe_weather_json_path, &response)?;
 
     let temperature = response["main"]["temp"].as_f64().unwrap();

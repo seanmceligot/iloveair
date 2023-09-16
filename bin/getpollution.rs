@@ -143,7 +143,7 @@ fn app_main(config_file: &String, maybe_pollution_json_path: Option<&String>) ->
     //     }
     //   ]
     // }
-    let response = reqwest::blocking::get(&url)?.json::<serde_json::Value>()?;
+    let response = reqwest::blocking::get(url)?.json::<serde_json::Value>()?;
 
     save_pollution_response(maybe_pollution_json_path, &response)?;
     let aqi = response["list"][0]["main"]["aqi"].as_u64().unwrap();
