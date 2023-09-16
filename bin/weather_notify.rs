@@ -3,23 +3,31 @@ use std::fs;
 use anyhow::{Context, Result};
 use clap::{command, Arg};
 use fs::File;
-use iloveair::config::get_open_windows_path;
+use iloveair::airthings_radon::celsius_to_fahrenheit;
+use iloveair::airthings_radon::Indoor;
 use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
-use iloveair::sensordata::pretty_print_sensor_data;
-use iloveair::sensordata::SensorData;
 use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
 use std::io::Write;
 
 fn read_indoor_json(indoor_cache_path: &String) -> Result<(u64, f32)> {
-    let contents = fs::read_to_string(indoor_cache_path).unwrap();
-    let indoor: SensorData = serde_json::from_str(&contents).unwrap();
-    pretty_print_sensor_data(&indoor);
-    let indoor_temp = indoor.temperature.val;
-    let humidity = indoor.humidity.val;
-    Ok((humidity as u64, indoor_temp))
+    let contents = fs::read_to_string(indoor_cache_path).with_context(|| {
+        format!(
+            "load_weather_response: could not read {}",
+            indoor_cache_path
+        )
+    })?;
+    let indoor: Indoor = serde_json::from_str(&contents).with_context(|| {
+        format!(
+            "load_weather_response: could not parse {}",
+            indoor_cache_path
+        )
+    })?;
+    let indoor_temp_celsius = indoor.temp;
+    let humidity = indoor.humidity;
+    let indoor_temp = celsius_to_fahrenheit(indoor_temp_celsius);
+    Ok((humidity as u64, indoor_temp as f32))
 }
-
 fn main() {
     let command = command!()
         .version("0.9")
@@ -45,7 +53,22 @@ fn main() {
                 .long("indoor")
                 .value_name("FILE")
                 .required(true)
-                .help("config ~/.cache/iloveair/waveplus.json"),
+                .help("config ~/.cache/iloveair/indoor.json"),
+        )
+        .arg(
+            Arg::new("window_state")
+                .short('d')
+                .long("window")
+                .value_name("FILE")
+                .required(true)
+                .help("config ~/.cache/iloveair/open_windows.state"),
+        )
+        .arg(
+            Arg::new("dry_run")
+                .long("dry-run")
+                .required(false)
+                .num_args(0)
+                .help("don't send notification or write window state"),
         );
     let matches = command.get_matches();
 
@@ -62,8 +85,19 @@ fn main() {
         // this else block is unreachable because the argument is required.
         unreachable!();
     };
+    let Some(window_state_path) = matches.get_one::<String>("window_state") else {
+        // this else block is unreachable because the argument is required.
+        unreachable!();
+    };
 
-    match app_main(pushover_config_path, weather_cache_path, indoor_cache_path) {
+    let is_dry_run = matches.get_flag("dry_run");
+    match app_main(
+        pushover_config_path,
+        weather_cache_path,
+        indoor_cache_path,
+        window_state_path,
+        is_dry_run,
+    ) {
         Ok(_) => (),
         Err(e) => println!("Error: {}", e),
     }
@@ -72,6 +106,8 @@ fn app_main(
     pushover_config_path: &String,
     weather_json_path: &String,
     indoor_cache_path: &String,
+    window_state_path: &String,
+    is_dry_run: bool,
 ) -> Result<()> {
     let (indoor_humidity, indoor_temp) = read_indoor_json(indoor_cache_path)?;
     let weather_json = load_weather_response(weather_json_path.as_str()).with_context(|| {
@@ -104,33 +140,37 @@ fn app_main(
     println!("can_let_in_temperature: {}", can_let_in_temperature);
 
     let can_open_window = can_let_in_humidify && can_let_in_temperature;
-    let is_open_window: bool = read_is_window_open();
-    let pushover_config = read_pushover_json(pushover_config_path)?;
-    if can_open_window && !is_open_window {
-        println!("send notification");
-        send_pushover_notification(
-            &pushover_config,
-            &format!(
-                "open the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
-                outdoor_temp, outdoor_humidity
-            ),
-        )?;
-    } else if !can_open_window && is_open_window {
-        println!("send notification");
-        send_pushover_notification(
-            &pushover_config,
-            &format!(
-                "close the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
-                outdoor_temp, outdoor_humidity
-            ),
-        )?;
+    println!("can_open_window: {}", can_open_window);
+    if is_dry_run {
     } else {
-        println!(
-            "no notification can open window {} is open window {}",
-            can_open_window, is_open_window
-        );
+        let is_open_window: bool = read_is_window_open(window_state_path);
+        let pushover_config = read_pushover_json(pushover_config_path)?;
+        if can_open_window && !is_open_window {
+            println!("send notification");
+            send_pushover_notification(
+                &pushover_config,
+                &format!(
+                    "open the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
+                    outdoor_temp, outdoor_humidity
+                ),
+            )?;
+        } else if !can_open_window && is_open_window {
+            println!("send notification");
+            send_pushover_notification(
+                &pushover_config,
+                &format!(
+                    "close the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
+                    outdoor_temp, outdoor_humidity
+                ),
+            )?;
+        } else {
+            println!(
+                "no notification can open window {} is open window {}",
+                can_open_window, is_open_window
+            );
+        }
+        save_is_window_open(window_state_path, can_open_window);
     }
-    save_is_window_open(can_open_window);
     Ok(())
 }
 fn is_modified_older_than(path: &str, seconds: u64) -> bool {
@@ -144,21 +184,21 @@ fn is_modified_older_than(path: &str, seconds: u64) -> bool {
     let diff = now_seconds - modified_seconds;
     diff > seconds
 }
-fn read_is_window_open() -> bool {
+fn read_is_window_open(window_open_path: &String) -> bool {
     // return false for closed if file does not exist
-    if !std::path::Path::new(get_open_windows_path().as_str()).exists() {
+    if !std::path::Path::new(window_open_path).exists() {
         return false;
     }
     // if state file is overe 8 hours old then assume closed and return False
-    if is_modified_older_than(get_open_windows_path().as_str(), 8 * 60 * 60) {
+    if is_modified_older_than(window_open_path, 8 * 60 * 60) {
         return false;
     }
 
-    let contents = fs::read_to_string(get_open_windows_path()).unwrap();
+    let contents = fs::read_to_string(window_open_path).unwrap();
     contents.parse::<bool>().unwrap()
 }
-fn save_is_window_open(can_open_window: bool) {
-    let mut file = File::create(get_open_windows_path()).unwrap();
+fn save_is_window_open(window_open_path: &String, can_open_window: bool) {
+    let mut file = File::create(window_open_path).unwrap();
     file.write_all(can_open_window.to_string().as_bytes())
         .unwrap();
 }

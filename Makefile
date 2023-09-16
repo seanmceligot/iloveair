@@ -1,24 +1,28 @@
-t:  pol
+all: weather airapi pol dryrun
 
 airapi: 
-	RUST_BACKTRACE=1 cargo run --bin read_waveplus
+	RUST_BACKTRACE=1 cargo run --bin read_waveplus -- --config ~/.config/iloveair/airthings.json --indoor ~/.cache/iloveair/indoor.json --token /home/sean/.cache/iloveair/airthings_token.json
 
 check: 
 	cargo check
 
+dryrun: 
+	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover ~/.config/iloveair/pushover.json --weather ~/.cache/iloveair/weather.json --indoor ~/.cache/iloveair/indoor.json --window ~/.cache/iloveair/open_windows.state --dry-run
 notify: 
-	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover ~/.config/iloveair/pushover.json --weather ~/.cache/iloveair/weather.json --indoor ~/.cache/iloveair/waveplus.json
+	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover ~/.config/iloveair/pushover.json --weather ~/.cache/iloveair/weather.json --indoor ~/.cache/iloveair/indoor.json --window ~/.cache/iloveair/open_windows.state
 
 weather:
 	cargo check
 	RUST_BACKTRACE=1 cargo run --bin getweather -- --config ~/.config/iloveair/openweathermap.json --out ~/.cache/iloveair/weather.json
-air: 
-	python python/read_waveplus.py
 
 pol:
 	RUST_BACKTRACE=1 cargo run --bin getpollution -- --config ~/.config/iloveair/openweathermap.json --out ~/.cache/iloveair/pollution.json
 
-all: weather air notify
+pyair: 
+	python python/read_waveplus.py
+
+hourly: 
+	./hourly.sh
 
 install_service:
 	systemctl --user daemon-reload

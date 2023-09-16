@@ -18,14 +18,6 @@ pub struct WeatherConfig {
     pub latitude: String,
     pub longitude: String,
 }
-pub const AIRTHINGS_CONFIG: &str = "/home/sean/.config/iloveair/airthings.json";
-pub const AIRTHINGS_TOKEN_CACHE: &str = "/home/sean/.cache/iloveair/airthings_token.json";
-
-const OPEN_WINDOWS_FILE: &str = "/home/sean/.cache/iloveair/open_windows.state";
-
-pub fn get_open_windows_path() -> String {
-    OPEN_WINDOWS_FILE.to_string()
-}
 pub fn read_airthings_config(filename: &str) -> Result<AirthingsConfig> {
     let mut file = File::open(filename)?;
     let mut contents = String::new();
