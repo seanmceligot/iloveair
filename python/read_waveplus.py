@@ -2,41 +2,19 @@ import json
 import struct
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from bluepy.btle import (UUID, BTLEDisconnectError, Characteristic,
-                         DefaultDelegate, Peripheral, Scanner)
+from bluepy.btle import UUID, BTLEDisconnectError, Characteristic, Peripheral
 from icecream import ic
+
+"""
+setup:
+pip install bluepy pyyaml icecream
+"""
 
 
 def c2f(celsius):
     return (celsius * 1.8) + 32
-
-
-# ===============================
-# Script guards for correct usage
-# ===============================
-
-
-# ====================================
-# Utility functions for WavePlus class
-# ====================================
-
-
-def parseSerialNumber(ManuDataHexStr):
-    if ManuDataHexStr is None or ManuDataHexStr == "None":
-        SN = "Unknown"
-    else:
-        ManuData = bytearray.fromhex(ManuDataHexStr)
-
-        if ((ManuData[1] << 8) | ManuData[0]) == 0x0334:
-            SN = ManuData[2]
-            SN |= ManuData[3] << 8
-            SN |= ManuData[4] << 16
-            SN |= ManuData[5] << 24
-        else:
-            SN = "Unknown"
-    return SN
 
 
 def get_peripheral(macAddr: str) -> Peripheral:
@@ -60,22 +38,6 @@ def get_characteristics(periph: Peripheral, uuid: UUID) -> Characteristic:
 
     curr_val_char = charectoristics[0]
     return curr_val_char
-
-
-def scan_for_sn(serial_number) -> Optional[str]:
-    scanner = Scanner().withDelegate(DefaultDelegate())
-    devices = scanner.scan(10)  # 0.1 seconds scan period
-    print(f"devices {len(devices)}")
-    for dev in devices:
-        ManuData = dev.getValueText(255)
-        print(f"{dev} {ManuData}")
-        serial_number = parseSerialNumber(ManuData)
-        if serial_number == serial_number:
-            print(f"matched {dev.addr}")
-            return dev.addr
-        else:
-            print(f"not matched {dev.addr}")
-            return None
 
 
 def disconnect(periph):
@@ -150,7 +112,6 @@ def main():
 
     print("Device serial number: %s" % serialNumber)
     MacAddr = "58:93:d8:8b:12:2a"
-
     perif: Peripheral = get_peripheral(MacAddr)
     uuid = UUID("b42e2a68-ade7-11e4-89d3-123b93f75cba")
     cvc: Characteristic = get_characteristics(perif, uuid)
@@ -204,10 +165,15 @@ def handle_sensor_values(sensors):
     data["pressure"] = {"val": pressure[0], "unit": pressure[1]}
     data["co2"] = {"val": cO2_lvl[0], "unit": cO2_lvl[1]}
     data["voc"] = {"val": vOC_lvl[0], "unit": vOC_lvl[1]}
-    ic(data)
     print(json.dumps(data, indent=2))
 
     save_to_json("/home/sean/.cache/iloveair/waveplus.json", data)
+    append_to_json("/home/sean/.cache/iloveair/waveplus_history.json", data)
+
+
+def append_to_json(filename: str, data: Dict[str, Any]):
+    with open(filename, "a") as f:
+        json.dump(data, f, indent=2)
 
 
 def save_to_json(filename: str, data: Dict[str, Any]):
