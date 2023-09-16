@@ -1,18 +1,45 @@
 # I Love Air
 
-A collection of tools to monitor and notify about weather and air quality.
+A collection of tools to compare indoor and outdoor temp and humidity and tell you when you can open your windows
 
 ## Configuration Files
 
-The tools utilize various configuration files which are expected to be located in the `~/.config/iloveair/` directory:
+The tools utilize various configuration. All paths are configurable with command line options
 
 - **Airthings Configuration**: `~/.config/iloveair/airthings.json`
+
+```json
+{
+  "client_id": "",
+  "client_secret": "",
+  "device_id": ""
+}
+```
+
 - **Pushover Configuration**: `~/.config/iloveair/pushover.json`
+
+```json
+{
+  "api_key": "",
+  "user_key": ""
+}
+```
+
 - **OpenWeatherMap Configuration**: `~/.config/iloveair/openweathermap.json`
+
+```json
+{
+  "api_key": "",
+  "city": "",
+  "country": "",
+  "latitude": "",
+  "longitude": ""
+}
+```
 
 ## Cache Files
 
-Some commands generate or utilize cache files stored in the `~/.cache/iloveair/` directory:
+generated cache files. All paths are configurable with command line options
 
 - **Indoor Data**: `~/.cache/iloveair/indoor.json`
 - **Pollution Data**: `~/.cache/iloveair/pollution.json`
