@@ -1,4 +1,4 @@
-t:  weather
+t:  pol
 
 airapi: 
 	RUST_BACKTRACE=1 cargo run --bin read_waveplus
@@ -17,7 +17,7 @@ air:
 	python python/read_waveplus.py
 
 pol:
-	cargo run --bin getpollution
+	RUST_BACKTRACE=1 cargo run --bin getpollution -- --config ~/.config/iloveair/openweathermap.json --out ~/.cache/iloveair/pollution.json
 
 all: weather air notify
 

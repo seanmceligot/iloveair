@@ -1,12 +1,11 @@
 extern crate reqwest;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::{command, Arg};
 use iloveair::config::read_weather_config;
-use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
-use std::fs;
+
 use std::fs::OpenOptions;
-use std::io::{self, Read, Write};
+use std::io::{stdout, Write};
 
 fn main() {
     let command = command!()
@@ -32,7 +31,7 @@ fn main() {
 
     let outfile = matches.get_one::<String>("out");
     if let Some(config_file) = matches.get_one::<String>("config") {
-        match the_main(outfile, config_file) {
+        match the_main(config_file, outfile) {
             Ok(_) => (),
             Err(e) => println!("Error: {}", e),
         }
@@ -60,7 +59,7 @@ fn save_weather_response(
             .with_context(|| format!("save_weather_response: could write {}", weather_json_path))?;
         println!("wrote: {}", weather_json_path);
     } else {
-        io::stdout()
+        stdout()
             .write_all(serde_json::to_string_pretty(response)?.as_bytes())
             .with_context(|| "save_weather_response: could write weather_json to stdout")?;
     }
@@ -75,7 +74,7 @@ fn file_modified_in_last_minutes(path: &str, minutes: u64) -> bool {
     let modified = modified.elapsed().unwrap().as_secs();
     modified < minutes * 60
 }
-fn the_main(maybe_weather_json_path: Option<&String>, config_file: &String) -> Result<()> {
+fn the_main(config_file: &String, maybe_weather_json_path: Option<&String>) -> Result<()> {
     let config = read_weather_config(config_file)
         .with_context(|| format!("could not read config {}", config_file))?;
 
@@ -89,7 +88,7 @@ fn the_main(maybe_weather_json_path: Option<&String>, config_file: &String) -> R
             return Ok(());
         }
     }
-    println!("API Key: {}", config.api_key);
+    //println!("API Key: {}", config.api_key);
     println!("City: {}", config.city);
     println!("Country: {}", config.country);
     let api_key = config.api_key;
