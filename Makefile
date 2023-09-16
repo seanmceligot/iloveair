@@ -1,12 +1,18 @@
-notify: 
+t:  weather
+
+airapi: 
+	RUST_BACKTRACE=1 cargo run --bin read_waveplus
+
+check: 
 	cargo check
+
+notify: 
 	cargo build
 	RUST_BACKTRACE=1 cargo run --bin weather_notify
 
 weather:
 	cargo check
-	RUST_BACKTRACE=1 cargo run --bin getweather
-
+	RUST_BACKTRACE=1 cargo run --bin getweather -- --config ~/.config/iloveair/openweathermap.json --out ~/.cache/iloveair/weather.json
 air: 
 	python python/read_waveplus.py
 

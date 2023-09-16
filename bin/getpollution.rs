@@ -72,8 +72,8 @@ fn the_main() -> Result<()> {
         println!("Latitude: {}", config.latitude);
         println!("longitude: {}", config.longitude);
         let api_key = config.api_key;
-        let city_name = config.city;
-        let country_code = config.country;
+        // let city_name = config.city;
+        // let country_code = config.country;
 
         let url = format!(
             "http://api.openweathermap.org/data/2.5/air_pollution?lat={}&lon={}&appid={}",
