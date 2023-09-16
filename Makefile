@@ -7,8 +7,7 @@ check:
 	cargo check
 
 notify: 
-	cargo build
-	RUST_BACKTRACE=1 cargo run --bin weather_notify
+	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover ~/.config/iloveair/pushover.json --weather ~/.cache/iloveair/weather.json --indoor ~/.cache/iloveair/waveplus.json
 
 weather:
 	cargo check

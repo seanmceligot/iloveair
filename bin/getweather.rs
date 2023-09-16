@@ -31,7 +31,7 @@ fn main() {
 
     let outfile = matches.get_one::<String>("out");
     if let Some(config_file) = matches.get_one::<String>("config") {
-        match the_main(config_file, outfile) {
+        match app_main(config_file, outfile) {
             Ok(_) => (),
             Err(e) => println!("Error: {}", e),
         }
@@ -74,7 +74,7 @@ fn file_modified_in_last_minutes(path: &str, minutes: u64) -> bool {
     let modified = modified.elapsed().unwrap().as_secs();
     modified < minutes * 60
 }
-fn the_main(config_file: &String, maybe_weather_json_path: Option<&String>) -> Result<()> {
+fn app_main(config_file: &String, maybe_weather_json_path: Option<&String>) -> Result<()> {
     let config = read_weather_config(config_file)
         .with_context(|| format!("could not read config {}", config_file))?;
 

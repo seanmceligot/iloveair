@@ -1,18 +1,18 @@
 use std::fs;
 
 use anyhow::{Context, Result};
+use clap::{command, Arg};
 use fs::File;
-use iloveair::config::get_indoor_path;
 use iloveair::config::get_open_windows_path;
-use iloveair::config::get_weather_path;
+use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::sensordata::pretty_print_sensor_data;
 use iloveair::sensordata::SensorData;
 use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
 use std::io::Write;
 
-fn read_indoor_json() -> Result<(u64, f32)> {
-    let contents = fs::read_to_string(get_indoor_path()).unwrap();
+fn read_indoor_json(indoor_cache_path: &String) -> Result<(u64, f32)> {
+    let contents = fs::read_to_string(indoor_cache_path).unwrap();
     let indoor: SensorData = serde_json::from_str(&contents).unwrap();
     pretty_print_sensor_data(&indoor);
     let indoor_temp = indoor.temperature.val;
@@ -21,19 +21,59 @@ fn read_indoor_json() -> Result<(u64, f32)> {
 }
 
 fn main() {
-    match real_main() {
-        Ok(_) => {}
-        Err(e) => {
-            println!("Error: {}", e);
-            for cause in e.chain() {
-                println!("  caused by: {}", cause);
-            }
-        }
+    let command = command!()
+        .version("0.9")
+        .arg(
+            Arg::new("pushover_config")
+                .short('p')
+                .long("pushover")
+                .value_name("FILE")
+                .required(true)
+                .help("config ~/.config/iloveair/pushover.json"),
+        )
+        .arg(
+            Arg::new("weather_cache")
+                .short('w')
+                .long("weather")
+                .value_name("FILE")
+                .required(true)
+                .help("config ~/.cache/iloveair/weather.json"),
+        )
+        .arg(
+            Arg::new("indoor_cache")
+                .short('i')
+                .long("indoor")
+                .value_name("FILE")
+                .required(true)
+                .help("config ~/.cache/iloveair/waveplus.json"),
+        );
+    let matches = command.get_matches();
+
+    let Some(pushover_config_path) = matches.get_one::<String>("pushover_config") else {
+        // This else block is unreachable because the argument is required.
+        unreachable!();
+    };
+
+    let Some(weather_cache_path) = matches.get_one::<String>("weather_cache") else {
+        // this else block is unreachable because the argument is required.
+        unreachable!();
+    };
+    let Some(indoor_cache_path) = matches.get_one::<String>("indoor_cache") else {
+        // this else block is unreachable because the argument is required.
+        unreachable!();
+    };
+
+    match app_main(pushover_config_path, weather_cache_path, indoor_cache_path) {
+        Ok(_) => (),
+        Err(e) => println!("Error: {}", e),
     }
 }
-fn real_main() -> Result<()> {
-    let (indoor_humidity, indoor_temp) = read_indoor_json()?;
-    let weather_json_path = get_weather_path();
+fn app_main(
+    pushover_config_path: &String,
+    weather_json_path: &String,
+    indoor_cache_path: &String,
+) -> Result<()> {
+    let (indoor_humidity, indoor_temp) = read_indoor_json(indoor_cache_path)?;
     let weather_json = load_weather_response(weather_json_path.as_str()).with_context(|| {
         format!(
             "load_weather_response: could not load {}",
@@ -65,18 +105,25 @@ fn real_main() -> Result<()> {
 
     let can_open_window = can_let_in_humidify && can_let_in_temperature;
     let is_open_window: bool = read_is_window_open();
+    let pushover_config = read_pushover_json(pushover_config_path)?;
     if can_open_window && !is_open_window {
         println!("send notification");
-        send_pushover_notification(&format!(
-            "open the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
-            outdoor_temp, outdoor_humidity
-        ))?;
+        send_pushover_notification(
+            &pushover_config,
+            &format!(
+                "open the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
+                outdoor_temp, outdoor_humidity
+            ),
+        )?;
     } else if !can_open_window && is_open_window {
         println!("send notification");
-        send_pushover_notification(&format!(
-            "close the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
-            outdoor_temp, outdoor_humidity
-        ))?;
+        send_pushover_notification(
+            &pushover_config,
+            &format!(
+                "close the windows 🪟 outdoor temp: {} outdoor_humidity: {}",
+                outdoor_temp, outdoor_humidity
+            ),
+        )?;
     } else {
         println!(
             "no notification can open window {} is open window {}",

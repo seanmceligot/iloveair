@@ -1,4 +1,3 @@
-use crate::config::get_pushover_path;
 use anyhow::{Context, Result};
 use reqwest::blocking::Client;
 use serde::Deserialize;
@@ -6,17 +5,26 @@ use serde_json::json;
 use std::fs;
 
 #[derive(Debug, Deserialize)]
-struct PushoverConfig {
+pub struct PushoverConfig {
     api_key: String,
     user_key: String,
 }
-fn read_pushover_json() -> PushoverConfig {
-    let contents = fs::read_to_string(get_pushover_path()).unwrap();
-    serde_json::from_str(&contents).unwrap()
+pub fn read_pushover_json(pushover_config_path: &String) -> Result<PushoverConfig> {
+    let contents = fs::read_to_string(pushover_config_path).with_context(|| {
+        format!(
+            "send_pushover_notification: could not read config {}",
+            pushover_config_path
+        )
+    })?;
+    serde_json::from_str(&contents).with_context(|| {
+        format!(
+            "send_pushover_notification: could not parse config {}",
+            pushover_config_path
+        )
+    })
 }
 
-pub fn send_pushover_notification(msg: &str) -> Result<()> {
-    let config = read_pushover_json();
+pub fn send_pushover_notification(config: &PushoverConfig, msg: &str) -> Result<()> {
     let params = json!({
         "token": config.api_key,
         "user": config.user_key,
