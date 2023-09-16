@@ -1,22 +1,33 @@
-all: weather airapi pol dryrun
+CONFIG_AIRTHINGS=~/.config/iloveair/airthings.json
+CONFIG_PUSHOVER=~/.config/iloveair/pushover.json
+CONFIG_WEATHER=~/.config/iloveair/openweathermap.json
 
-airapi: 
-	RUST_BACKTRACE=1 cargo run --bin read_waveplus -- --config ~/.config/iloveair/airthings.json --indoor ~/.cache/iloveair/indoor.json --token /home/sean/.cache/iloveair/airthings_token.json
+CACHE_INDOOR=~/.cache/iloveair/indoor.json
+CACHE_POLLUTION=~/.cache/iloveair/pollution.json
+CACHE_TOKEN=~/.cache/iloveair/airthings_token.json
+CACHE_WEATHER=~/.cache/iloveair/weather.json
+CACHE_WINDOW=~/.cache/iloveair/open_windows.state
 
-check: 
+all: check weather airapi pol dryrun
+
+check:
 	cargo check
 
-dryrun: 
-	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover ~/.config/iloveair/pushover.json --weather ~/.cache/iloveair/weather.json --indoor ~/.cache/iloveair/indoor.json --window ~/.cache/iloveair/open_windows.state --dry-run
-notify: 
-	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover ~/.config/iloveair/pushover.json --weather ~/.cache/iloveair/weather.json --indoor ~/.cache/iloveair/indoor.json --window ~/.cache/iloveair/open_windows.state
+airapi:
+	RUST_BACKTRACE=1 cargo run --bin read_waveplus -- --config $(CONFIG_AIRTHINGS) --indoor $(CACHE_INDOOR) --token $(CACHE_TOKEN)
+
+dryrun:
+	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover $(CONFIG_PUSHOVER) --weather $(CACHE_WEATHER) --indoor $(CACHE_INDOOR) --window $(CACHE_WINDOW) --dry-run
+
+notify:
+	RUST_BACKTRACE=1 cargo run --bin weather_notify -- --pushover $(CONFIG_PUSHOVER) --weather $(CACHE_WEATHER) --indoor $(CACHE_INDOOR) --window $(CACHE_WINDOW)
 
 weather:
 	cargo check
-	RUST_BACKTRACE=1 cargo run --bin getweather -- --config ~/.config/iloveair/openweathermap.json --out ~/.cache/iloveair/weather.json
+	RUST_BACKTRACE=1 cargo run --bin getweather -- --config $(CONFIG_WEATHER) --out $(CACHE_WEATHER)
 
 pol:
-	RUST_BACKTRACE=1 cargo run --bin getpollution -- --config ~/.config/iloveair/openweathermap.json --out ~/.cache/iloveair/pollution.json
+	RUST_BACKTRACE=1 cargo run --bin getpollution -- --config $(CONFIG_WEATHER) --out $(CACHE_POLLUTION)
 
 pyair: 
 	python python/read_waveplus.py
