@@ -24,7 +24,11 @@ pub fn read_pushover_json(pushover_config_path: &String) -> Result<PushoverConfi
     })
 }
 
-pub fn send_pushover_notification(config: &PushoverConfig, msg: &str) -> Result<()> {
+pub fn send_pushover_notification(dry_run: bool, config: &PushoverConfig, msg: &str) -> Result<()> {
+    if dry_run {
+        println!("dry-run: {}", msg);
+        return Ok(());
+    }
     let params = json!({
         "token": config.api_key,
         "user": config.user_key,
