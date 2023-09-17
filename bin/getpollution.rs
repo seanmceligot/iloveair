@@ -3,6 +3,7 @@ extern crate reqwest;
 use anyhow::{Context, Result};
 use clap::command;
 use clap::Arg;
+use iloveair::config::file_older_than_minutes;
 use iloveair::config::read_weather_config;
 //use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
 use std::fs::OpenOptions;
@@ -73,15 +74,6 @@ fn save_pollution_response(
     }
     Ok(())
 }
-fn file_modified_in_last_minutes(path: &str, minutes: u64) -> bool {
-    if !std::path::Path::new(path).exists() {
-        return false;
-    }
-    let metadata = std::fs::metadata(path).unwrap();
-    let modified = metadata.modified().unwrap();
-    let modified = modified.elapsed().unwrap().as_secs();
-    modified < minutes * 60
-}
 fn aqi_description(aqi: u64) -> &'static str {
     match aqi {
         1 => "Good",
@@ -98,7 +90,7 @@ fn app_main(config_file: &String, maybe_pollution_json_path: Option<&String>) ->
 
     let update_no_more_than_minutes = 10;
     if let Some(pollution_json_path) = maybe_pollution_json_path {
-        if file_modified_in_last_minutes(pollution_json_path, update_no_more_than_minutes) {
+        if file_older_than_minutes(pollution_json_path, update_no_more_than_minutes) {
             println!(
                 "pollution.json is less than {} minutes old",
                 update_no_more_than_minutes

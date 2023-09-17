@@ -38,3 +38,12 @@ pub fn read_weather_config(filename: &str) -> Result<WeatherConfig> {
 
     Ok(config)
 }
+pub fn file_older_than_minutes(path: &str, minutes: u64) -> bool {
+    if !std::path::Path::new(path).exists() {
+        return false;
+    }
+    let metadata = std::fs::metadata(path).unwrap();
+    let modified = metadata.modified().unwrap();
+    let elapsed_secs = modified.elapsed().unwrap().as_secs();
+    elapsed_secs < minutes / 60
+}
