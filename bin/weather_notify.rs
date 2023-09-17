@@ -1,7 +1,5 @@
-use std::fs;
-
 use anyhow::{Context, Result};
-use clap::{command, Arg};
+use clap::{command, value_parser, Arg};
 use fs::File;
 use iloveair::airthings_radon::celsius_to_fahrenheit;
 use iloveair::airthings_radon::Indoor;
@@ -10,9 +8,21 @@ use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::notify::PushoverConfig;
 use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
+
+use std::fs;
 use std::io::Write;
 
-fn read_indoor_json(indoor_cache_path: &String) -> Result<(u64, f32)> {
+struct IndoorSettings {
+    max_humidity: u64,
+    min_temp: f64,
+    max_temp: f64,
+}
+struct HumidityTemp {
+    humidity: u64,
+    temp: f64,
+}
+
+fn read_indoor_json(indoor_cache_path: &String) -> Result<HumidityTemp> {
     let contents = fs::read_to_string(indoor_cache_path).with_context(|| {
         format!(
             "load_weather_response: could not read {}",
@@ -28,7 +38,10 @@ fn read_indoor_json(indoor_cache_path: &String) -> Result<(u64, f32)> {
     let indoor_temp_celsius = indoor.temp;
     let humidity = indoor.humidity;
     let indoor_temp = celsius_to_fahrenheit(indoor_temp_celsius);
-    Ok((humidity as u64, indoor_temp as f32))
+    Ok(HumidityTemp {
+        humidity: humidity as u64,
+        temp: indoor_temp,
+    })
 }
 fn main() {
     let command = command!()
@@ -71,6 +84,30 @@ fn main() {
                 .required(false)
                 .num_args(0)
                 .help("don't send notification or write window state"),
+        )
+        .arg(
+            Arg::new("max_humidity")
+                .value_parser(value_parser!(u64))
+                .long("max-humidity")
+                .value_name("VALUE")
+                .default_value("60")
+                .help("Maximum allowable humidity"),
+        )
+        .arg(
+            Arg::new("min_temp")
+                .value_parser(value_parser!(f64))
+                .long("min-temp")
+                .value_name("VALUE")
+                .default_value("50.0")
+                .help("Minimum allowable temperature"),
+        )
+        .arg(
+            Arg::new("max_temp")
+                .value_parser(value_parser!(f64))
+                .long("max-temp")
+                .value_name("VALUE")
+                .default_value("84.0")
+                .help("Maximum allowable temperature"),
         );
     let matches = command.get_matches();
 
@@ -92,6 +129,24 @@ fn main() {
         unreachable!();
     };
 
+    let Some(max_humidity) = matches.get_one::<u64>("max_humidity") else {
+        // this else block is unreachable because default value would be retuned
+        unreachable!();
+    };
+    let Some(min_temp) = matches.get_one::<f64>("min_temp") else {
+        // This else block is unreachable because of the default value.
+        unreachable!();
+    };
+
+    let Some(max_temp) = matches.get_one::<f64>("max_temp") else {
+        // This else block is unreachable because of the default value.
+        unreachable!();
+    };
+    let indoor_settings = IndoorSettings {
+        max_humidity: *max_humidity,
+        min_temp: *min_temp,
+        max_temp: *max_temp,
+    };
     let is_dry_run = matches.get_flag("dry_run");
     match app_main(
         pushover_config_path,
@@ -99,6 +154,7 @@ fn main() {
         indoor_cache_path,
         window_state_path,
         is_dry_run,
+        indoor_settings,
     ) {
         Ok(_) => (),
         Err(e) => println!("Error: {}", e),
@@ -110,8 +166,9 @@ fn app_main(
     indoor_cache_path: &String,
     window_state_path: &String,
     is_dry_run: bool,
+    indoor_settings: IndoorSettings,
 ) -> Result<()> {
-    let (indoor_humidity, indoor_temp) = read_indoor_json(indoor_cache_path)?;
+    let indoor = read_indoor_json(indoor_cache_path)?;
     let weather_json = load_weather_response(weather_json_path.as_str()).with_context(|| {
         format!(
             "load_weather_response: could not load {}",
@@ -130,14 +187,18 @@ fn app_main(
             weather_json_path
         )
     })?;
-
-    println!("indoor_humidity: {}", indoor_humidity);
-    println!("outdoor_humidity: {}", outdoor_humidity);
-    println!("indoor temp: {}", indoor_temp);
-    println!("outdoor_temp: {}", outdoor_temp);
-
-    let can_let_in_humidify = outdoor_humidity < indoor_humidity || outdoor_humidity < 60;
-    let can_let_in_temperature = outdoor_temp > 50.0 && outdoor_temp < 90.0;
+    let outdoor = HumidityTemp {
+        humidity: outdoor_humidity,
+        temp: outdoor_temp,
+    };
+    println!("indoor humidity: {}", indoor.humidity);
+    println!("outdoor humidity: {}", outdoor.humidity);
+    println!("indoor temp: {}", indoor.temp);
+    println!("outdoor temp: {}", outdoor.temp);
+    let can_let_in_humidify =
+        outdoor.humidity < indoor.humidity || outdoor.humidity < indoor_settings.max_humidity;
+    let can_let_in_temperature =
+        outdoor.temp > indoor_settings.min_temp && outdoor.temp < indoor_settings.max_temp;
     println!("can_let_in_humidify: {}", can_let_in_humidify);
     println!("can_let_in_temperature: {}", can_let_in_temperature);
 
@@ -150,10 +211,8 @@ fn app_main(
         window_state,
         &pushover_config,
         is_dry_run,
-        indoor_temp,
-        indoor_humidity,
-        outdoor_temp,
-        outdoor_humidity,
+        indoor,
+        outdoor,
         window_state_path,
     )
 }
@@ -185,10 +244,8 @@ fn notify_if_needed(
     window_state: Option<bool>,
     pushover_config: &PushoverConfig,
     is_dry_run: bool,
-    indoor_temp: f32,
-    indoor_humidity: u64,
-    outdoor_temp: f64,
-    outdoor_humidity: u64,
+    indoor: HumidityTemp,
+    outdoor: HumidityTemp,
     window_state_path: &String,
 ) -> Result<()> {
     let (unknown_window_state, is_open_window) = match window_state {
@@ -211,14 +268,14 @@ fn notify_if_needed(
             println!("send notification");
             send_pushover_notification(
                 is_dry_run,
-                &pushover_config,
+                pushover_config,
                 &format!(
                     "open the windows 🪟  \
                     outdoor temp: {}  \
                     indoor temp: {}  \
-                    outdoor_humidity: {} \
-                    indoor_humidity: {}",
-                    outdoor_temp, indoor_temp, outdoor_humidity, indoor_humidity
+                    outdoor humidity: {} \
+                    indoor humidity: {}",
+                    outdoor.temp, indoor.temp, outdoor.humidity, indoor.humidity
                 ),
             )?;
             save_is_window_open(is_dry_run, window_state_path, window_should_be_open);
@@ -227,21 +284,21 @@ fn notify_if_needed(
             println!("send notification");
             send_pushover_notification(
                 is_dry_run,
-                &pushover_config,
+                pushover_config,
                 &format!(
                     "close the windows 🪟 
                     outdoor temp: {} \
                     indoor temp: {} \
-                    outdoor_humidity: {}
+                    outdoor humidity: {}
                     indoor_humidity: {}
                 ",
-                    outdoor_temp, indoor_temp, outdoor_humidity, indoor_humidity
+                    outdoor.temp, indoor.temp, outdoor.humidity, indoor.humidity
                 ),
             )?;
             save_is_window_open(is_dry_run, window_state_path, window_should_be_open);
         }
         _ => {
-            assert!(unknown_window_state == false);
+            assert!(!unknown_window_state);
             println!(
                 "no change can open window {} is open window {}",
                 window_should_be_open, is_open_window
