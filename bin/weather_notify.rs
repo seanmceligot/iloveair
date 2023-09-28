@@ -196,9 +196,9 @@ fn app_main(
     println!("indoor temp: {}", indoor.temp);
     println!("outdoor temp: {}", outdoor.temp);
     let can_let_in_humidify =
-        outdoor.humidity < indoor.humidity || outdoor.humidity < indoor_settings.max_humidity;
+        outdoor.humidity <= indoor.humidity || outdoor.humidity <= indoor_settings.max_humidity;
     let can_let_in_temperature =
-        outdoor.temp > indoor_settings.min_temp && outdoor.temp < indoor_settings.max_temp;
+        outdoor.temp >= indoor_settings.min_temp && outdoor.temp <= indoor_settings.max_temp;
     println!("can_let_in_humidify: {}", can_let_in_humidify);
     println!("can_let_in_temperature: {}", can_let_in_temperature);
 
