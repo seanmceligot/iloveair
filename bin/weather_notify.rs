@@ -8,7 +8,6 @@ use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::notify::PushoverConfig;
 use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
-
 use std::fs;
 use std::io::Write;
 
@@ -169,7 +168,7 @@ fn app_main(
     indoor_settings: IndoorSettings,
 ) -> Result<()> {
     let indoor = read_indoor_json(indoor_cache_path)?;
-    let weather_json = load_weather_response(weather_json_path.as_str()).with_context(|| {
+    let weather_json = load_weather_response(weather_json_path).with_context(|| {
         format!(
             "load_weather_response: could not load {}",
             weather_json_path
