@@ -8,8 +8,14 @@ use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::notify::PushoverConfig;
 use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
+use iloveair::pretty::PrettyBool;
 use std::fs;
 use std::io::Write;
+use anyhow::anyhow;
+
+static DOWN: &str = "↓";
+static UP: &str  = "↗";
+static EQ: &str  = "=";
 
 struct IndoorSettings {
     max_humidity: u64,
@@ -50,7 +56,8 @@ fn main() {
                 .short('p')
                 .long("pushover")
                 .value_name("FILE")
-                .required(true)
+                .default_value("~/.config/iloveair/pushover.json")
+                .required(false)
                 .help("config ~/.config/iloveair/pushover.json"),
         )
         .arg(
@@ -169,19 +176,19 @@ fn app_main(
 ) -> Result<()> {
     let indoor = read_indoor_json(indoor_cache_path)?;
     let weather_json = load_weather_response(weather_json_path).with_context(|| {
-        format!(
+        anyhow!(
             "load_weather_response: could not load {}",
             weather_json_path
         )
     })?;
     let outdoor_humidity = weather_humidity(&weather_json).with_context(|| {
-        format!(
+        anyhow!(
             "load_weather_response: could parse humidity {}",
             weather_json_path
         )
     })?;
     let outdoor_temp = weather_tempurature(&weather_json).with_context(|| {
-        format!(
+        anyhow!(
             "load_weather_response: could parse temperature {}",
             weather_json_path
         )
@@ -190,19 +197,30 @@ fn app_main(
         humidity: outdoor_humidity,
         temp: outdoor_temp,
     };
-    println!("indoor humidity: {}", indoor.humidity);
-    println!("outdoor humidity: {}", outdoor.humidity);
-    println!("indoor temp: {}", indoor.temp);
-    println!("outdoor temp: {}", outdoor.temp);
+    fn updown<T: PartialOrd + ToString>(fst: T, snd: T) -> String {
+        if let Some(o) = fst.partial_cmp(&snd) {
+            match o  {
+            std::cmp::Ordering::Less => DOWN.into(),
+            std::cmp::Ordering::Greater => UP.into(),
+            std::cmp::Ordering::Equal => EQ.into(),
+        }
+        } else {
+            "?".into()
+        }
+    } 
+    println!("indoor temp: 🏠{} {}🌡️", updown(indoor.temp, outdoor.temp), indoor.temp);
+    println!("outdoor temp: 🌳{} {}🌡️", updown(outdoor.temp, indoor.temp), outdoor.temp);
+    println!("Indoor humidity: 🏠{} {}💧", updown(indoor.humidity, outdoor.humidity), indoor.humidity);
+    println!("outdoor humidity: 🌳 {} {}💧", updown(outdoor.humidity, indoor.humidity),outdoor.humidity);
     let can_let_in_humidify =
         outdoor.humidity <= indoor.humidity || outdoor.humidity <= indoor_settings.max_humidity;
     let can_let_in_temperature =
         outdoor.temp >= indoor_settings.min_temp && outdoor.temp <= indoor_settings.max_temp;
-    println!("can_let_in_humidify: {}", can_let_in_humidify);
-    println!("can_let_in_temperature: {}", can_let_in_temperature);
+    println!("can_let_in_humidify: 💧{}", PrettyBool::new(can_let_in_humidify));
+    println!("can_let_in_temperature: 🌡️{}", PrettyBool::new(can_let_in_temperature));
 
     let window_should_be_open = can_let_in_humidify && can_let_in_temperature;
-    println!("window_should_be_open: {}", window_should_be_open);
+    println!(" window_should_be_open: 🪟{}", PrettyBool::new(window_should_be_open));
     let window_state = load_saved_window_state(window_state_path, 8 * 60);
     let pushover_config = read_pushover_json(pushover_config_path)?;
     notify_if_needed(

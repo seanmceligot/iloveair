@@ -7,6 +7,8 @@ use iloveair::config::read_weather_config;
 use std::fs::OpenOptions;
 use std::io::{stdout, Write};
 
+static UPDATE_NO_MORE_THAN_MINUTES: u64 = 10;
+
 fn main() {
     let command = command!()
         .version("0.9")
@@ -78,16 +80,16 @@ fn app_main(config_file: &String, maybe_weather_json_path: Option<&String>) -> R
     let config = read_weather_config(config_file)
         .with_context(|| format!("could not read config {}", config_file))?;
 
-    let update_no_more_than_minutes = 10;
     if let Some(weather_json_path) = maybe_weather_json_path {
-        if file_modified_in_last_minutes(weather_json_path, update_no_more_than_minutes) {
+        if file_modified_in_last_minutes(weather_json_path, UPDATE_NO_MORE_THAN_MINUTES) {
             println!(
                 "weather.json is less than {} minutes old",
-                update_no_more_than_minutes
+                UPDATE_NO_MORE_THAN_MINUTES
             );
             return Ok(());
         }
     }
+
     //println!("API Key: {}", config.api_key);
     println!("City: {}", config.city);
     println!("Country: {}", config.country);
