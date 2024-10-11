@@ -44,9 +44,11 @@ hourly:
 	./hourly.sh
 
 install_service:
+	systemctl --user enable --now systemd/iloveair.service 
+	systemctl --user enable --now systemd/iloveair.timer
+	systemctl --user enable --now systemd/rain.service 
+	systemctl --user enable --now systemd/rain.timer
 	systemctl --user daemon-reload
-	systemctl --user enable --now iloveair.timer
-	systemctl --user enable --now iloveair.service 
 
 journalctl:
 	journalctl --user -u iloveair.service
@@ -57,3 +59,8 @@ status:
 
 backup:
 	git bundle create /drive/bundles/iloveair.bunde --all
+docs:
+	cargo doc --open
+
+rain: 
+	python save_rain_data.py
