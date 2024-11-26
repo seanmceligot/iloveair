@@ -1,9 +1,9 @@
+use anyhow::anyhow;
 use anyhow::{Context, Result};
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use serde_json::json;
 use std::fs;
-use anyhow::anyhow;
 
 #[derive(Debug, Deserialize)]
 pub struct PushoverConfig {
@@ -14,14 +14,12 @@ pub fn read_to_string_with_expand(path: &String) -> Result<String, anyhow::Error
     let expand = shellexpand::full(path)?;
     let expanded = expand.as_ref();
 
-    fs::read_to_string(expanded)
-        .map_err(|e| anyhow!("error reading {} {}", expand, e))
-
+    fs::read_to_string(expanded).map_err(|e| anyhow!("error reading {} {}", expand, e))
 }
 pub fn read_pushover_json(pushover_config_path: &String) -> Result<PushoverConfig> {
     let contents = read_to_string_with_expand(pushover_config_path)
         .map_err(|e| anyhow!("error reading {} {}", pushover_config_path, e))?;
-    
+
     serde_json::from_str(&contents).with_context(|| {
         format!(
             "send_pushover_notification: could not parse config {}",

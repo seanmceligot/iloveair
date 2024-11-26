@@ -11,7 +11,6 @@ pub fn weather_humidity(weather_json: &serde_json::Value) -> Result<u64> {
     Ok(humidity)
 }
 
-
 pub fn load_weather_response<P: AsRef<Path>>(weather_json_path: P) -> Result<serde_json::Value> {
     let weather_json = std::fs::read_to_string(&weather_json_path).with_context(|| {
         format!(
