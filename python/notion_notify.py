@@ -3,32 +3,39 @@ import requests
 import os
 import json
 import argparse
-from typing import List
+from typing import List, Final
+from icecream import ic
 
-# Set up the required Notion parameters
-NOTION_CONFIG_PATH = os.path.expanduser("~/.config/iloveair/notion.json")
-NOTION_API_KEY = ""
-NOTION_PAGE_ID = ""
 
-# Load Notion API Key and Page ID from config file
-if os.path.exists(NOTION_CONFIG_PATH):
-    with open(NOTION_CONFIG_PATH, 'r') as config_file:
-        config_data = json.load(config_file)
-        NOTION_API_KEY = config_data.get("notion_api_key", "")
-        NOTION_PAGE_ID = config_data.get("page_id", "")
+notion_config_path = os.path.expanduser("~/.config/iloveair/notion.json")
 
-# Define headers for Notion API requests
-headers = {
-    "Authorization": f"Bearer {NOTION_API_KEY}",
-    "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
-}
+class Config:
+    notion_api_key: Final[str]
+    notion_page_id: Final[str]
+
+    def __init__(self, notion_api_key:str, notion_page_id:str):
+        self.notion_api_key = notion_api_key
+        self.notion_page_id = notion_page_id
+
+def load_config(name: str) -> Config:
+    # load notion api key and page id from config file
+    if os.path.exists(notion_config_path):
+        with open(notion_config_path, 'r') as config_file:
+            config_data = json.load(config_file)
+            notion_api_key = config_data.get("notion_api_key", None)
+            notion_page_id = config_data.get(f"{name}_page_id", None)
+    ic(notion_page_id)
+    assert notion_page_id, "notion_page_id"
+    assert notion_api_key, "notion_api_key"
+    return Config(notion_api_key=notion_api_key, notion_page_id=notion_page_id)
 
 def run_command(command_args: List[str]):
     """Runs the given command to fetch output data."""
     command = " ".join(command_args)
+    ic(command)
     try:
         output = subprocess.check_output(command, shell=True).decode("utf-8")
+        ic(output)
         return output
     except subprocess.CalledProcessError as e:
         print(f"Error running command: {e}")
@@ -39,10 +46,21 @@ def parse_output_data(data) -> List[str]:
     lines = data.strip().split('\n')
     return lines
 
-def replace_notion_page_content(lines):
+def replace_notion_page_content(config, lines):
     """Replaces the existing content of the Notion page with the new output data."""
     # Delete existing children
-    url = f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children"
+    ic(config.notion_page_id)
+    assert config.notion_page_id, "config.notion_page_id"
+    #import pdb;pdb.set_trace()
+    url = f"https://api.notion.com/v1/blocks/{config.notion_page_id}/children"
+    ic(url)
+    # Define headers for Notion API requests
+    headers = {
+        "Authorization": f"Bearer {config.notion_api_key}",
+        "Content-Type": "application/json",
+        "Notion-Version": "2022-06-28"
+    }
+
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         existing_children = response.json().get("results", [])
@@ -91,6 +109,8 @@ def main():
     parser.add_argument('--name', required=True, help="The name to use for caching the output file.")
     args = parser.parse_args()
 
+    config = load_config(args.name)
+
     if not args.command:
         print("No command provided. Exiting.")
         return
@@ -101,7 +121,7 @@ def main():
         cached_lines = read_output_from_file(args.name)
 
         if lines != cached_lines:
-            replace_notion_page_content(lines)
+            replace_notion_page_content(config, lines)
             write_output_to_file(lines, args.name)
         else:
             print("No changes in output data. Notion page update skipped.")

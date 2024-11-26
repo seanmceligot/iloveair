@@ -21,6 +21,6 @@ CACHE_WINDOW=~/.cache/iloveair/open_windows.state
 ## ## #bat $CACHE_INDOOR
 ## ## #cargo run --bin weather_notify -- --pushover $CONFIG_PUSHOVER --weather $CACHE_WEATHER --indoor $CACHE_INDOOR --window $CACHE_WINDOW
 ## ## cargo run --bin weather_notify --dry-run --pushover $CONFIG_PUSHOVER --weather $CACHE_WEATHER --indoor $CACHE_INDOOR --window $CACHE_WINDOW
-
-~/git/python/venv/bin/python python/save_rain_data.py  
-/home/sean/git/python/venv/bin/python python/notion_notify.py --name weather "~/.cargo/bin/weather_notify --dry-run --pushover ${CONFIG_PUSHOVER} --weather ${CACHE_WEATHER} --indoor ${CACHE_INDOOR} --window ${CACHE_WINDOW}"
+set -e
+/home/sean/git/python/venv/bin/python python/notion_notify.py --name Rain "~/git/python/venv/bin/python python/save_rain_data.py"
+/home/sean/git/python/venv/bin/python python/notion_notify.py --name Indoor "~/.cargo/bin/weather_notify --dry-run --pushover ${CONFIG_PUSHOVER} --weather ${CACHE_WEATHER} --indoor ${CACHE_INDOOR} --window ${CACHE_WINDOW}"
