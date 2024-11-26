@@ -6,21 +6,22 @@ import argparse
 from typing import List, Final
 from icecream import ic
 
-
-notion_config_path = os.path.expanduser("~/.config/iloveair/notion.json")
+# Configuration paths
+NOTION_CONFIG_PATH: Final[str] = os.path.expanduser("~/.config/iloveair/notion.json")
+CACHE_DIR: Final[str] = os.path.expanduser("~/.cache/iloveair/")
 
 class Config:
     notion_api_key: Final[str]
     notion_page_id: Final[str]
 
-    def __init__(self, notion_api_key:str, notion_page_id:str):
+    def __init__(self, notion_api_key: str, notion_page_id: str):
         self.notion_api_key = notion_api_key
         self.notion_page_id = notion_page_id
 
 def load_config(name: str) -> Config:
     # load notion api key and page id from config file
-    if os.path.exists(notion_config_path):
-        with open(notion_config_path, 'r') as config_file:
+    if os.path.exists(NOTION_CONFIG_PATH):
+        with open(NOTION_CONFIG_PATH, 'r') as config_file:
             config_data = json.load(config_file)
             notion_api_key = config_data.get("notion_api_key", None)
             notion_page_id = config_data.get(f"{name}_page_id", None)
@@ -29,7 +30,7 @@ def load_config(name: str) -> Config:
     assert notion_api_key, "notion_api_key"
     return Config(notion_api_key=notion_api_key, notion_page_id=notion_page_id)
 
-def run_command(command_args: List[str]):
+def run_command(command_args: List[str]) -> str:
     """Runs the given command to fetch output data."""
     command = " ".join(command_args)
     ic(command)
@@ -41,17 +42,16 @@ def run_command(command_args: List[str]):
         print(f"Error running command: {e}")
         return None
 
-def parse_output_data(data) -> List[str]:
+def parse_output_data(data: str) -> List[str]:
     """Parses the output data from the command."""
     lines = data.strip().split('\n')
     return lines
 
-def replace_notion_page_content(config, lines):
+def replace_notion_page_content(config: Config, lines: List[str]) -> None:
     """Replaces the existing content of the Notion page with the new output data."""
     # Delete existing children
     ic(config.notion_page_id)
     assert config.notion_page_id, "config.notion_page_id"
-    #import pdb;pdb.set_trace()
     url = f"https://api.notion.com/v1/blocks/{config.notion_page_id}/children"
     ic(url)
     # Define headers for Notion API requests
@@ -89,21 +89,21 @@ def replace_notion_page_content(config, lines):
     else:
         print(f"Failed to replace Notion page content. Status Code: {response.status_code}, Response: {response.text}")
 
-def write_output_to_file(lines, name):
+def write_output_to_file(lines: List[str], name: str) -> None:
     """Writes the output data to a file."""
-    cache_output_txt = os.path.expanduser(f"~/.cache/iloveair/{name}.txt")
+    cache_output_txt = os.path.join(CACHE_DIR, f"{name}.txt")
     with open(cache_output_txt, 'w') as file:
         file.write('\n'.join(lines))
 
-def read_output_from_file(name) -> List[str]:
+def read_output_from_file(name: str) -> List[str]:
     """Reads the output data from the file if it exists."""
-    cache_output_txt = os.path.expanduser(f"~/.cache/iloveair/{name}.txt")
+    cache_output_txt = os.path.join(CACHE_DIR, f"{name}.txt")
     if os.path.exists(cache_output_txt):
         with open(cache_output_txt, 'r') as file:
             return file.read().splitlines()
     return []
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run a command and update Notion with its output.")
     parser.add_argument('command', nargs='*', help="The command to run, with arguments.")
     parser.add_argument('--name', required=True, help="The name to use for caching the output file.")
