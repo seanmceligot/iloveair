@@ -30,7 +30,7 @@ reqwest = { version = "0.11.18", features = ["json", "blocking"] }
 anyhow = "1.0.75"
 chrono = { version = "0.4.26", features = ["serde"] }
 futures = { version = "0.3.28", optional = true }
-tokio = { version = "1.32.0", features = ["macros", "rt", "signal"] }
+tokio = { version = "1.32.0", features = ["macros", "rt", "signal", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.14", optional = true }
 clap = { version = "4.4.2", features = ["cargo"] }
 shellexpand = "3.1.0"

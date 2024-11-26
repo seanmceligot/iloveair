@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use anyhow::{Context, Result};
 use clap::{command, value_parser, Arg};
 use fs::File;
@@ -7,15 +8,14 @@ use iloveair::config::file_older_than_minutes;
 use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::notify::PushoverConfig;
-use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
 use iloveair::pretty::PrettyBool;
+use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
 use std::fs;
 use std::io::Write;
-use anyhow::anyhow;
 
 static DOWN: &str = "↓";
-static UP: &str  = "↗";
-static EQ: &str  = "=";
+static UP: &str = "↗";
+static EQ: &str = "=";
 
 struct IndoorSettings {
     max_humidity: u64,
@@ -199,28 +199,53 @@ fn app_main(
     };
     fn updown<T: PartialOrd + ToString>(fst: T, snd: T) -> String {
         if let Some(o) = fst.partial_cmp(&snd) {
-            match o  {
-            std::cmp::Ordering::Less => DOWN.into(),
-            std::cmp::Ordering::Greater => UP.into(),
-            std::cmp::Ordering::Equal => EQ.into(),
-        }
+            match o {
+                std::cmp::Ordering::Less => DOWN.into(),
+                std::cmp::Ordering::Greater => UP.into(),
+                std::cmp::Ordering::Equal => EQ.into(),
+            }
         } else {
             "?".into()
         }
-    } 
-    println!("indoor temp: 🏠{} {}🌡️", updown(indoor.temp, outdoor.temp), indoor.temp);
-    println!("outdoor temp: 🌳{} {}🌡️", updown(outdoor.temp, indoor.temp), outdoor.temp);
-    println!("Indoor humidity: 🏠{} {}💧", updown(indoor.humidity, outdoor.humidity), indoor.humidity);
-    println!("outdoor humidity: 🌳 {} {}💧", updown(outdoor.humidity, indoor.humidity),outdoor.humidity);
+    }
+    println!(
+        "indoor temp: 🏠{} {}🌡️",
+        updown(indoor.temp, outdoor.temp),
+        indoor.temp
+    );
+    println!(
+        "outdoor temp: 🌳{} {}🌡️",
+        updown(outdoor.temp, indoor.temp),
+        outdoor.temp
+    );
+    println!(
+        "Indoor humidity: 🏠{} {}💧",
+        updown(indoor.humidity, outdoor.humidity),
+        indoor.humidity
+    );
+    println!(
+        "outdoor humidity: 🌳 {} {}💧",
+        updown(outdoor.humidity, indoor.humidity),
+        outdoor.humidity
+    );
     let can_let_in_humidify =
         outdoor.humidity <= indoor.humidity || outdoor.humidity <= indoor_settings.max_humidity;
     let can_let_in_temperature =
         outdoor.temp >= indoor_settings.min_temp && outdoor.temp <= indoor_settings.max_temp;
-    println!("can_let_in_humidify: 💧{}", PrettyBool::new(can_let_in_humidify));
-    println!("can_let_in_temperature: 🌡️{}", PrettyBool::new(can_let_in_temperature));
+    println!(
+        "can_let_in_humidify: 💧{}",
+        PrettyBool::new(can_let_in_humidify)
+    );
+    println!(
+        "can_let_in_temperature: 🌡️{}",
+        PrettyBool::new(can_let_in_temperature)
+    );
 
     let window_should_be_open = can_let_in_humidify && can_let_in_temperature;
-    println!(" window_should_be_open: 🪟{}", PrettyBool::new(window_should_be_open));
+    println!(
+        "window_should_be_open: 🪟{}",
+        PrettyBool::new(window_should_be_open)
+    );
     let window_state = load_saved_window_state(window_state_path, 8 * 60);
     let pushover_config = read_pushover_json(pushover_config_path)?;
     notify_if_needed(
@@ -272,7 +297,7 @@ fn notify_if_needed(
     if unknown_window_state {
         println!("unknown_window_state {}", unknown_window_state);
     } else {
-        println!("is_open_window {}", is_open_window);
+        println!("is_open_window: {}", is_open_window);
     }
     const CAN_CLOSE_WINDOW: bool = false;
     const WINDOW_IS_CLOSED: Option<bool> = Some(false);
@@ -303,7 +328,7 @@ fn notify_if_needed(
                 is_dry_run,
                 pushover_config,
                 &format!(
-                    "close the windows 🪟 
+                    "close the windows 🪟
                     outdoor temp: {} \
                     indoor temp: {} \
                     outdoor humidity: {}

@@ -98,12 +98,16 @@ async fn fetch_token<'a>(client_id: &'a str, client_secret: &'a str) -> Result<A
             e
         )
     })?;
-    Ok(token_response.into())
+    //let _ = token_response.into())
+    let r: AccessToken = token_response.into();
+    Ok(r)
+    //Ok(token_response.into())
+    //Ok(ExitStatus<::into(token_response))
 }
 
 // https://airthings.org/api/air-indoor
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
 async fn main() {
     let command = command!()
         .version("0.9")
