@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use anyhow::{Context, Result};
+use chrono::Local;
 use clap::{command, value_parser, Arg};
 use fs::File;
 use iloveair::airthings_radon::celsius_to_fahrenheit;
@@ -22,6 +23,7 @@ struct IndoorSettings {
     min_temp: f64,
     max_temp: f64,
 }
+#[derive(Clone, Debug)]
 struct HumidityTemp {
     humidity: u64,
     temp: f64,
@@ -197,17 +199,56 @@ fn app_main(
         humidity: outdoor_humidity,
         temp: outdoor_temp,
     };
-    fn updown<T: PartialOrd + ToString>(fst: T, snd: T) -> String {
-        if let Some(o) = fst.partial_cmp(&snd) {
-            match o {
-                std::cmp::Ordering::Less => DOWN.into(),
-                std::cmp::Ordering::Greater => UP.into(),
-                std::cmp::Ordering::Equal => EQ.into(),
-            }
-        } else {
-            "?".into()
+    let can_let_in_humidify =
+        outdoor.humidity <= indoor.humidity || outdoor.humidity <= indoor_settings.max_humidity;
+    let can_let_in_temperature =
+        outdoor.temp >= indoor_settings.min_temp && outdoor.temp <= indoor_settings.max_temp;
+    let window_should_be_open = can_let_in_humidify && can_let_in_temperature;
+    print_report(
+        indoor.clone(),
+        outdoor.clone(),
+        can_let_in_humidify,
+        can_let_in_temperature,
+        window_should_be_open,
+    );
+    let window_state = load_saved_window_state(window_state_path, 8 * 60);
+    let pushover_config = read_pushover_json(pushover_config_path)?;
+    notify_if_needed(
+        window_should_be_open,
+        window_state,
+        &pushover_config,
+        is_dry_run,
+        indoor,
+        outdoor,
+        window_state_path,
+    )
+}
+fn updown<T: PartialOrd + ToString>(fst: T, snd: T) -> String {
+    if let Some(o) = fst.partial_cmp(&snd) {
+        match o {
+            std::cmp::Ordering::Less => DOWN.into(),
+            std::cmp::Ordering::Greater => UP.into(),
+            std::cmp::Ordering::Equal => EQ.into(),
         }
+    } else {
+        "?".into()
     }
+}
+fn print_report(
+    indoor: HumidityTemp,
+    outdoor: HumidityTemp,
+    can_let_in_humidify: bool,
+    can_let_in_temperature: bool,
+    window_should_be_open: bool,
+) {
+    //let today = Local::now().date_naive();
+
+    let now = Local::now().naive_local(); // Get current date and time in naive format
+    println!("Time: {}", now.format("%A %Y-%m-%d %I:%M:%S %p"));
+
+    //println!("Date Time: {}", today.format("%A %Y-%m-%d %I:%M %p"));
+    //println!("Date Time: {}", today.format("%A %Y-%m-%d %H"));
+
     println!(
         "indoor temp: 🏠{} {}🌡️",
         updown(indoor.temp, outdoor.temp),
@@ -228,10 +269,6 @@ fn app_main(
         updown(outdoor.humidity, indoor.humidity),
         outdoor.humidity
     );
-    let can_let_in_humidify =
-        outdoor.humidity <= indoor.humidity || outdoor.humidity <= indoor_settings.max_humidity;
-    let can_let_in_temperature =
-        outdoor.temp >= indoor_settings.min_temp && outdoor.temp <= indoor_settings.max_temp;
     println!(
         "can_let_in_humidify: 💧{}",
         PrettyBool::new(can_let_in_humidify)
@@ -241,22 +278,10 @@ fn app_main(
         PrettyBool::new(can_let_in_temperature)
     );
 
-    let window_should_be_open = can_let_in_humidify && can_let_in_temperature;
     println!(
         "window_should_be_open: 🪟{}",
         PrettyBool::new(window_should_be_open)
     );
-    let window_state = load_saved_window_state(window_state_path, 8 * 60);
-    let pushover_config = read_pushover_json(pushover_config_path)?;
-    notify_if_needed(
-        window_should_be_open,
-        window_state,
-        &pushover_config,
-        is_dry_run,
-        indoor,
-        outdoor,
-        window_state_path,
-    )
 }
 fn load_saved_window_state(window_open_path: &String, stale_minutes: u64) -> Option<bool> {
     // if state file does not exist or is invalid the None
