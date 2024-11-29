@@ -204,24 +204,29 @@ fn app_main(
     let can_let_in_temperature =
         outdoor.temp >= indoor_settings.min_temp && outdoor.temp <= indoor_settings.max_temp;
     let window_should_be_open = can_let_in_humidify && can_let_in_temperature;
+    let window_state = load_saved_window_state(window_state_path, 8 * 60);
     print_report(
         indoor.clone(),
         outdoor.clone(),
         can_let_in_humidify,
         can_let_in_temperature,
         window_should_be_open,
-    );
-    let window_state = load_saved_window_state(window_state_path, 8 * 60);
-    let pushover_config = read_pushover_json(pushover_config_path)?;
-    notify_if_needed(
-        window_should_be_open,
         window_state,
-        &pushover_config,
-        is_dry_run,
-        indoor,
-        outdoor,
-        window_state_path,
-    )
+    );
+    let notify_state = determine_notify_state(window_should_be_open, window_state);
+    match notify_state {
+        NotifyState::OpenWindows => {
+            save_is_window_open(is_dry_run, window_state_path, window_should_be_open);
+        }
+        NotifyState::CloseWindow => {
+            save_is_window_open(is_dry_run, window_state_path, window_should_be_open);
+        }
+        NotifyState::NoChange => {}
+    };
+    let pushover_config = read_pushover_json(pushover_config_path)?;
+
+    notify_if_needed(&pushover_config, is_dry_run, indoor, outdoor, notify_state)?;
+    Ok(())
 }
 fn updown<T: PartialOrd + ToString>(fst: T, snd: T) -> String {
     if let Some(o) = fst.partial_cmp(&snd) {
@@ -240,6 +245,7 @@ fn print_report(
     can_let_in_humidify: bool,
     can_let_in_temperature: bool,
     window_should_be_open: bool,
+    window_state: Option<bool>,
 ) {
     //let today = Local::now().date_naive();
 
@@ -282,6 +288,15 @@ fn print_report(
         "window_should_be_open: 🪟{}",
         PrettyBool::new(window_should_be_open)
     );
+    let (unknown_window_state, is_open_window) = match window_state {
+        Some(is_open_window) => (false, is_open_window),
+        None => (true, false),
+    };
+    if unknown_window_state {
+        println!("unknown_window_state {}", unknown_window_state);
+    } else {
+        println!("is_window_open: 🪟{}", PrettyBool::new(is_open_window));
+    }
 }
 fn load_saved_window_state(window_open_path: &String, stale_minutes: u64) -> Option<bool> {
     // if state file does not exist or is invalid the None
@@ -306,32 +321,36 @@ fn load_saved_window_state(window_open_path: &String, stale_minutes: u64) -> Opt
         }
     }
 }
-fn notify_if_needed(
-    window_should_be_open: bool,
-    window_state: Option<bool>,
-    pushover_config: &PushoverConfig,
-    is_dry_run: bool,
-    indoor: HumidityTemp,
-    outdoor: HumidityTemp,
-    window_state_path: &String,
-) -> Result<()> {
-    let (unknown_window_state, is_open_window) = match window_state {
-        Some(is_open_window) => (false, is_open_window),
-        None => (true, false),
-    };
-    if unknown_window_state {
-        println!("unknown_window_state {}", unknown_window_state);
-    } else {
-        println!("is_open_window: {}", is_open_window);
-    }
+enum NotifyState {
+    OpenWindows,
+    CloseWindow,
+    NoChange,
+}
+fn determine_notify_state(window_should_be_open: bool, window_state: Option<bool>) -> NotifyState {
     const CAN_CLOSE_WINDOW: bool = false;
     const WINDOW_IS_CLOSED: Option<bool> = Some(false);
     const IS_OPEN_WINDOW: Option<bool> = Some(true);
     const CAN_OPEN_WINDOW: bool = true;
     const UNKNOWN_STATE: Option<bool> = None;
-
     match (window_should_be_open, window_state) {
         (CAN_OPEN_WINDOW, UNKNOWN_STATE) | (CAN_OPEN_WINDOW, WINDOW_IS_CLOSED) => {
+            NotifyState::OpenWindows
+        }
+        (CAN_CLOSE_WINDOW, UNKNOWN_STATE) | (CAN_CLOSE_WINDOW, IS_OPEN_WINDOW) => {
+            NotifyState::CloseWindow
+        }
+        _ => NotifyState::NoChange,
+    }
+}
+fn notify_if_needed(
+    pushover_config: &PushoverConfig,
+    is_dry_run: bool,
+    indoor: HumidityTemp,
+    outdoor: HumidityTemp,
+    notify_state: NotifyState,
+) -> Result<()> {
+    match notify_state {
+        NotifyState::OpenWindows => {
             println!("send notification");
             send_pushover_notification(
                 is_dry_run,
@@ -345,9 +364,8 @@ fn notify_if_needed(
                     outdoor.temp, indoor.temp, outdoor.humidity, indoor.humidity
                 ),
             )?;
-            save_is_window_open(is_dry_run, window_state_path, window_should_be_open);
         }
-        (CAN_CLOSE_WINDOW, UNKNOWN_STATE) | (CAN_CLOSE_WINDOW, IS_OPEN_WINDOW) => {
+        NotifyState::CloseWindow => {
             println!("send notification");
             send_pushover_notification(
                 is_dry_run,
@@ -362,15 +380,8 @@ fn notify_if_needed(
                     outdoor.temp, indoor.temp, outdoor.humidity, indoor.humidity
                 ),
             )?;
-            save_is_window_open(is_dry_run, window_state_path, window_should_be_open);
         }
-        _ => {
-            assert!(!unknown_window_state);
-            println!(
-                "no change can open window {} is open window {}",
-                window_should_be_open, is_open_window
-            );
-        }
+        NotifyState::NoChange => {}
     }
     Ok(())
 }
