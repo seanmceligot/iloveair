@@ -1,56 +1,14 @@
 use anyhow::anyhow;
 use anyhow::{Context, Result};
-use chrono::Local;
 use clap::{command, Arg};
 use crc32fast::Hasher;
 use fs::File;
-use iloveair::airthings_radon::celsius_to_fahrenheit;
-use iloveair::airthings_radon::Indoor;
-use iloveair::config::file_older_than_minutes;
 use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::notify::PushoverConfig;
-use iloveair::pretty::PrettyBool;
-use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
 use std::fs;
 use std::io::Write;
 
-static DOWN: &str = "↓";
-static UP: &str = "↗";
-static EQ: &str = "=";
-
-struct IndoorSettings {
-    max_humidity: u64,
-    min_temp: f64,
-    max_temp: f64,
-}
-#[derive(Clone, Debug)]
-struct HumidityTemp {
-    humidity: u64,
-    temp: f64,
-}
-
-fn read_indoor_json(indoor_cache_path: &String) -> Result<HumidityTemp> {
-    let contents = fs::read_to_string(indoor_cache_path).with_context(|| {
-        format!(
-            "load_weather_response: could not read {}",
-            indoor_cache_path
-        )
-    })?;
-    let indoor: Indoor = serde_json::from_str(&contents).with_context(|| {
-        format!(
-            "load_weather_response: could not parse {}",
-            indoor_cache_path
-        )
-    })?;
-    let indoor_temp_celsius = indoor.temp;
-    let humidity = indoor.humidity;
-    let indoor_temp = celsius_to_fahrenheit(indoor_temp_celsius);
-    Ok(HumidityTemp {
-        humidity: humidity as u64,
-        temp: indoor_temp,
-    })
-}
 fn main() {
     let command = command!()
         .version("0.9")
@@ -130,120 +88,6 @@ fn app_main(pushover_config_path: &String, text_in_path: &String, is_dry_run: bo
     }
     Ok(())
 }
-fn updown<T: PartialOrd + ToString>(fst: T, snd: T) -> String {
-    if let Some(o) = fst.partial_cmp(&snd) {
-        match o {
-            std::cmp::Ordering::Less => DOWN.into(),
-            std::cmp::Ordering::Greater => UP.into(),
-            std::cmp::Ordering::Equal => EQ.into(),
-        }
-    } else {
-        "?".into()
-    }
-}
-fn print_report(
-    indoor: HumidityTemp,
-    outdoor: HumidityTemp,
-    can_let_in_humidify: bool,
-    can_let_in_temperature: bool,
-    window_should_be_open: bool,
-    window_state: Option<bool>,
-) {
-    //let today = Local::now().date_naive();
-
-    let now = Local::now().naive_local(); // Get current date and time in naive format
-    println!("Time: {}", now.format("%A %Y-%m-%d %I:%M:%S %p"));
-
-    //println!("Date Time: {}", today.format("%A %Y-%m-%d %I:%M %p"));
-    //println!("Date Time: {}", today.format("%A %Y-%m-%d %H"));
-
-    println!(
-        "indoor temp: 🏠{} {}🌡️",
-        updown(indoor.temp, outdoor.temp),
-        indoor.temp
-    );
-    println!(
-        "outdoor temp: 🌳{} {}🌡️",
-        updown(outdoor.temp, indoor.temp),
-        outdoor.temp
-    );
-    println!(
-        "Indoor humidity: 🏠{} {}💧",
-        updown(indoor.humidity, outdoor.humidity),
-        indoor.humidity
-    );
-    println!(
-        "outdoor humidity: 🌳 {} {}💧",
-        updown(outdoor.humidity, indoor.humidity),
-        outdoor.humidity
-    );
-    println!(
-        "can_let_in_humidify: 💧{}",
-        PrettyBool::new(can_let_in_humidify)
-    );
-    println!(
-        "can_let_in_temperature: 🌡️{}",
-        PrettyBool::new(can_let_in_temperature)
-    );
-
-    println!(
-        "window_should_be_open: 🪟{}",
-        PrettyBool::new(window_should_be_open)
-    );
-    let (unknown_window_state, is_open_window) = match window_state {
-        Some(is_open_window) => (false, is_open_window),
-        None => (true, false),
-    };
-    if unknown_window_state {
-        println!("unknown_window_state {}", unknown_window_state);
-    } else {
-        println!("is_window_open: 🪟{}", PrettyBool::new(is_open_window));
-    }
-}
-fn load_saved_window_state(window_open_path: &String, stale_minutes: u64) -> Option<bool> {
-    // if state file does not exist or is invalid the None
-    // None means send notify
-    // true or false means send only if state changed
-    if !std::path::Path::new(window_open_path).exists() {
-        // not yet set
-        println!("no window.state file");
-        None
-    } else if file_older_than_minutes(window_open_path, stale_minutes) {
-        println!("window.state is stale");
-        // stale
-        None
-    } else {
-        let maybe_contents = fs::read_to_string(window_open_path);
-        match maybe_contents {
-            Ok(contents) => match contents.parse::<bool>() {
-                Ok(b) => Some(b),
-                Err(_) => None,
-            },
-            Err(_) => None,
-        }
-    }
-}
-enum NotifyState {
-    OpenWindows,
-    CloseWindow,
-    NoChange,
-}
-fn determine_notify_state(window_should_be_open: bool, window_state: Option<bool>) -> NotifyState {
-    const CAN_CLOSE_WINDOW: bool = false;
-    const WINDOW_IS_CLOSED: Option<bool> = Some(false);
-    const IS_OPEN_WINDOW: Option<bool> = Some(true);
-    const CAN_OPEN_WINDOW: bool = true;
-    const UNKNOWN_STATE: Option<bool> = None;
-    match (window_should_be_open, window_state) {
-        (CAN_OPEN_WINDOW, UNKNOWN_STATE) | (CAN_OPEN_WINDOW, WINDOW_IS_CLOSED) => {
-            NotifyState::OpenWindows
-        }
-        (CAN_CLOSE_WINDOW, UNKNOWN_STATE) | (CAN_CLOSE_WINDOW, IS_OPEN_WINDOW) => {
-            NotifyState::CloseWindow
-        }
-        _ => NotifyState::NoChange,
-    }
-}
 fn notify_pushover(
     pushover_config: &PushoverConfig,
     is_dry_run: bool,
@@ -252,11 +96,4 @@ fn notify_pushover(
     println!("send notification");
     send_pushover_notification(is_dry_run, pushover_config, text_in)?;
     Ok(())
-}
-fn save_is_window_open(is_dry_run: bool, window_open_path: &String, can_open_window: bool) {
-    if !is_dry_run {
-        let mut file = File::create(window_open_path).unwrap();
-        file.write_all(can_open_window.to_string().as_bytes())
-            .unwrap();
-    }
 }
