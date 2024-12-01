@@ -5,7 +5,6 @@ use reqwest::blocking::Client;
 use serde::Deserialize;
 use serde_json::json;
 
-
 #[derive(Debug, Deserialize)]
 pub struct PushoverConfig {
     api_key: String,

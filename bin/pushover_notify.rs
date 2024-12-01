@@ -3,10 +3,10 @@ use anyhow::{Context, Result};
 use clap::{command, Arg};
 use crc32fast::Hasher;
 use fs::File;
+use iloveair::audit::read_to_string_with_shellexpand;
+use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::notify::PushoverConfig;
-use iloveair::notify::read_pushover_json;
-use iloveair::audit::read_to_string_with_shellexpand;
 use std::fs;
 use std::io::Write;
 

@@ -4,11 +4,11 @@ use chrono::Local;
 use clap::{command, value_parser, Arg};
 use iloveair::airthings_radon::celsius_to_fahrenheit;
 use iloveair::airthings_radon::Indoor;
+use iloveair::audit::read_to_string_with_shellexpand;
 use iloveair::pretty::PrettyBool;
 use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
 use std::fs::OpenOptions;
 use std::io::Write;
-use iloveair::audit::read_to_string_with_shellexpand;
 
 static DOWN: &str = "↓";
 static UP: &str = "↗";
@@ -217,10 +217,7 @@ fn print_report(
     let now = Local::now().naive_local(); // Get current date and time in naive format
     let mut report = String::new();
 
-    report.push_str(&format!(
-        "Time: {}\n",
-        now.format("%A %Y-%m-%d %I:%M %p")
-    ));
+    report.push_str(&format!("Time: {}\n", now.format("%A %Y-%m-%d %I:%M %p")));
     report.push_str(&format!(
         "window_should_be_open: 🪟{}\n",
         PrettyBool::new(window_should_be_open)
@@ -272,4 +269,3 @@ fn print_report(
         }
     }
 }
-
