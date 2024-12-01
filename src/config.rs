@@ -1,7 +1,6 @@
+use crate::audit::read_to_string_with_shellexpand;
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::Read;
 
 #[derive(Serialize, Deserialize)]
 pub struct AirthingsConfig {
@@ -19,9 +18,7 @@ pub struct WeatherConfig {
     pub longitude: String,
 }
 pub fn read_airthings_config(filename: &str) -> Result<AirthingsConfig> {
-    let mut file = File::open(filename)?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
+    let contents = read_to_string_with_shellexpand(&filename.to_string())?;
 
     let config: AirthingsConfig = serde_json::from_str(&contents)
         .map_err(|e| anyhow!(format!("could not parse {} {}", filename, e)))?;
@@ -29,9 +26,7 @@ pub fn read_airthings_config(filename: &str) -> Result<AirthingsConfig> {
     Ok(config)
 }
 pub fn read_weather_config(filename: &str) -> Result<WeatherConfig> {
-    let mut file = File::open(filename)?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
+    let contents = read_to_string_with_shellexpand(&filename.to_string())?;
 
     let config: WeatherConfig = serde_json::from_str(&contents)
         .with_context(|| format!("read_weather_config: could not parse {}", filename))?;

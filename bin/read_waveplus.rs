@@ -3,6 +3,7 @@ extern crate tokio;
 use anyhow::{anyhow, Context, Error, Result};
 use chrono::{DateTime, Duration, Utc};
 use clap::{command, Arg};
+use iloveair::audit::read_to_string_with_path;
 use iloveair::config::read_airthings_config;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
@@ -39,7 +40,7 @@ impl AccessToken {
 }
 
 fn read_json_token<P: AsRef<Path>>(path: P) -> Option<AccessToken> {
-    let file_content = fs::read_to_string(path).ok()?;
+    let file_content = read_to_string_with_path(path.as_ref()).ok()?;
     let access_token: AccessToken = serde_json::from_str(&file_content).ok()?;
     if access_token.has_expired() {
         None

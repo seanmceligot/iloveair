@@ -3,9 +3,10 @@ use anyhow::{Context, Result};
 use clap::{command, Arg};
 use crc32fast::Hasher;
 use fs::File;
-use iloveair::notify::read_pushover_json;
 use iloveair::notify::send_pushover_notification;
 use iloveair::notify::PushoverConfig;
+use iloveair::notify::read_pushover_json;
+use iloveair::audit::read_to_string_with_shellexpand;
 use std::fs;
 use std::io::Write;
 
@@ -56,14 +57,14 @@ fn main() {
 
 fn is_changed(text_in_path: &str, text_in: &String) -> Result<bool> {
     // Step 1: Define checksum path by changing extension from .txt to .md5
-    let checksum_path = text_in_path.replace(".txt", ".crc32");
+    let checksum_path = text_in_path.replace(".txt", ".pushover.crc32");
 
     let mut hasher = Hasher::new();
     hasher.update(text_in.as_bytes());
     let computed_checksum = hasher.finalize().to_string();
 
     // Step 3: Determine if the checksum has changed
-    let changed = match fs::read_to_string(&checksum_path) {
+    let changed = match read_to_string_with_shellexpand(&checksum_path) {
         Ok(existing_checksum) => existing_checksum.trim() != computed_checksum,
         Err(_) => true,
     };
@@ -72,6 +73,7 @@ fn is_changed(text_in_path: &str, text_in: &String) -> Result<bool> {
     if changed {
         let mut file = File::create(&checksum_path)?;
         writeln!(file, "{}", computed_checksum)?;
+        println!("WROTE: {}", checksum_path);
     }
 
     Ok(changed)
@@ -79,7 +81,7 @@ fn is_changed(text_in_path: &str, text_in: &String) -> Result<bool> {
 
 fn app_main(pushover_config_path: &String, text_in_path: &String, is_dry_run: bool) -> Result<()> {
     let pushover_config = read_pushover_json(pushover_config_path)?;
-    let text_in = fs::read_to_string(text_in_path)
+    let text_in = read_to_string_with_shellexpand(text_in_path)
         .with_context(|| anyhow!("could not read {}", text_in_path))?;
     let is_changed =
         is_changed(text_in_path, &text_in).with_context(|| anyhow!("error checking checksum"))?;
