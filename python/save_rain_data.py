@@ -5,6 +5,8 @@ import polars as pl
 from datetime import datetime, timedelta
 import os
 import json
+import sys
+from icecream import ic
 
 NOTION_CONFIG_PATH = os.path.expanduser("~/.config/iloveair/rain.json")
 RAIN_DATA_URL = ""
@@ -75,22 +77,24 @@ def save_precipitation_to_csv(precipitation):
     # Write the DataFrame to CSV
     df.write_csv(csv_path)
 
-    print(f"Precipitation data saved to {csv_path}")
+    print(f"Wrote:{csv_path}")
 
+def report(data, out):
+        print("Weather Data:", file=out)
+        print(datetime.now(), file=out)
+        print(f"High Temperature yesterday: {data['high_temperature']}°F", file=out)
+        print(f"Low Temperature last 12 hours : {data['low_temperature']}°F", file=out)
+        print(f"Precipitation last 24 hours: {data['precipitation']} inches", file=out)
 
 def main():
+    out_file = "/home/sean/.cache/iloveair/Rain.txt"
     data = scrape_weather_data()
     if data:
-        print("Values represent:")
-        print("- High temperature from yesterday")
-        print("- Low temperature over the last 12 hours (since 7 PM LST yesterday)")
-        print("- Precipitation over the last 24 hours (since 7 AM LST yesterday)")
-
-        print("\nDulles International Airport Weather Data:")
-        print(f"High Temperature: {data['high_temperature']}°F")
-        print(f"Low Temperature: {data['low_temperature']}°F")
-        print(f"Precipitation: {data['precipitation']} inches")
-
+        ic(data)
+        report(data, sys.stdout)
+        with open(out_file, "w") as f:
+            report(data, f)
+        print(f"Wrote: {out_file}")
         save_precipitation_to_csv(data["precipitation"])
     else:
         print("Failed to retrieve weather data.")

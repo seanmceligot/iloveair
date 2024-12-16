@@ -1,17 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Arg};
 use crc32fast::Hasher;
-use reqwest::blocking::{Client, Response};
+use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::Path;
-
-#[derive(Deserialize, Serialize)]
-struct Config {
-    notion_api_key: String,
-    notion_page_id: String,
-}
 
 fn main() {
     let command = command!()
@@ -56,7 +51,7 @@ fn app_main(config_path: &str, text_in_path: &str, name: &str) -> Result<()> {
     let config = load_config(config_path)?;
     let lines = read_lines_from_file(text_in_path)?;
     if is_changed(text_in_path, &lines)? {
-        replace_notion_page_content(&config, &lines)?;
+        replace_notion_page_content(&config, name, &lines)?;
         cache_output(name, &lines)?;
     } else {
         println!("No changes detected. Notion update skipped.");
@@ -64,13 +59,22 @@ fn app_main(config_path: &str, text_in_path: &str, name: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+struct Config {
+    notion_api_key: String,
+    page: HashMap<String, Page>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct Page {
+    page_id: String,
+}
 fn load_config(path: &str) -> Result<Config> {
     let mut file = File::open(shellexpand::tilde(path).as_ref())
         .with_context(|| anyhow!("Failed to open config file at {}", path))?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    let config: Config = serde_json::from_str(&contents)
-        .with_context(|| anyhow!("Failed to parse config file at {}", path))?;
+    let config: Config = serde_json::from_str(&contents)?;
     Ok(config)
 }
 
@@ -110,11 +114,11 @@ fn cache_output(name: &str, lines: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn replace_notion_page_content(config: &Config, lines: &[String]) -> Result<()> {
+fn replace_notion_page_content(config: &Config, name: &str, lines: &[String]) -> Result<()> {
     let client = Client::new();
     let url = format!(
         "https://api.notion.com/v1/blocks/{}/children",
-        config.notion_page_id
+        config.page[name].page_id
     );
     let headers = [
         ("Authorization", format!("Bearer {}", config.notion_api_key)),

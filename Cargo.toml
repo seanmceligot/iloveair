@@ -12,8 +12,8 @@ name = "getweather"
 path = "bin/getweather.rs"
 
 [[bin]]
-name = "weather_notify"
-path = "bin/weather_notify.rs"
+name = "weather_report"
+path = "bin/weather_report.rs"
 
 [[bin]]
 name = "getpollution"

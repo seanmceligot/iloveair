@@ -256,16 +256,19 @@ fn print_report(
 
     // Write to file if not a dry run
     if !is_dry_run {
+
         if let Ok(mut file) = OpenOptions::new()
             .create(true)
-            .append(true)
+            .write(true)
+            .truncate(true)
             .open(text_out_path)
         {
             if let Err(e) = writeln!(file, "{}", report) {
-                eprintln!("Failed to write to file: {}", e);
+                eprintln!("Failed to write to file '{}': {}", text_out_path, e);
             }
         } else {
-            eprintln!("Failed to open file: {}", text_out_path);
+            eprintln!("Failed to open file '{}': {}", text_out_path, std::io::Error::last_os_error());
         }
+
     }
 }
