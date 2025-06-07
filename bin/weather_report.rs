@@ -182,12 +182,16 @@ fn app_main(
         outdoor.humidity <= indoor.humidity || outdoor.humidity <= indoor_settings.max_humidity;
     let can_let_in_temperature =
         outdoor.temp >= indoor_settings.min_temp && outdoor.temp <= indoor_settings.max_temp;
+    let temp_diff = outdoor.temp - indoor.temp;
     let window_should_be_open = can_let_in_humidify && can_let_in_temperature;
+    let humidity_diff = outdoor.humidity - indoor.humidity;
     print_report(
         indoor.clone(),
         outdoor.clone(),
         can_let_in_humidify,
+        humidity_diff,
         can_let_in_temperature,
+        temp_diff,
         window_should_be_open,
         text_out_path,
         is_dry_run,
@@ -209,7 +213,9 @@ fn print_report(
     indoor: HumidityTemp,
     outdoor: HumidityTemp,
     can_let_in_humidify: bool,
+    humidity_diff: u64,
     can_let_in_temperature: bool,
+    temp_diff: f64,
     window_should_be_open: bool,
     text_out_path: &String,
     is_dry_run: bool,
@@ -223,32 +229,34 @@ fn print_report(
         PrettyBool::new(window_should_be_open)
     ));
     report.push_str(&format!(
-        "indoor temp: 🏠{} {}🌡️\n",
+        "🏠 indoor temp: {} {}🌡️\n",
         updown(indoor.temp, outdoor.temp),
         indoor.temp
     ));
     report.push_str(&format!(
-        "outdoor temp: 🌳{} {}🌡️\n",
+        "🌳 outdoor temp: {} {}🌡️\n",
         updown(outdoor.temp, indoor.temp),
         outdoor.temp
     ));
     report.push_str(&format!(
-        "Indoor humidity: 🏠{} {}💧\n",
+        "🏠 Indoor humidity: {} {}💧\n",
         updown(indoor.humidity, outdoor.humidity),
         indoor.humidity
     ));
     report.push_str(&format!(
-        "outdoor humidity: 🌳 {} {}💧\n",
+        "🌳 outdoor humidity: {} {}💧\n",
         updown(outdoor.humidity, indoor.humidity),
         outdoor.humidity
     ));
     report.push_str(&format!(
-        "can_let_in_humidify: 💧{}\n",
-        PrettyBool::new(can_let_in_humidify)
+        "💧 can_let_in_humidify: {} {}\n",
+        PrettyBool::new(can_let_in_humidify),
+        humidity_diff
     ));
     report.push_str(&format!(
-        "can_let_in_temperature: 🌡️{}\n",
-        PrettyBool::new(can_let_in_temperature)
+        "🌡️can_let_in_temperature: {} {}\n",
+        PrettyBool::new(can_let_in_temperature),
+        temp_diff
     ));
 
     // Print to stdout
@@ -256,7 +264,6 @@ fn print_report(
 
     // Write to file if not a dry run
     if !is_dry_run {
-
         if let Ok(mut file) = OpenOptions::new()
             .create(true)
             .write(true)
@@ -267,8 +274,11 @@ fn print_report(
                 eprintln!("Failed to write to file '{}': {}", text_out_path, e);
             }
         } else {
-            eprintln!("Failed to open file '{}': {}", text_out_path, std::io::Error::last_os_error());
+            eprintln!(
+                "Failed to open file '{}': {}",
+                text_out_path,
+                std::io::Error::last_os_error()
+            );
         }
-
     }
 }

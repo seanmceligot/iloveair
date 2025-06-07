@@ -1,9 +1,74 @@
 use crate::audit::read_to_string_with_shellexpand;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{Message, SmtpTransport, Transport};
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use serde_json::json;
+
+#[derive(Debug, Deserialize)]
+pub struct EmailConfig {
+    gmail_username: String,
+    gmail_app_password: String,
+    from_address: String,
+    to_address: String,
+}
+
+pub fn read_email_json(email_config_path: &String) -> Result<EmailConfig> {
+    let contents = read_to_string_with_shellexpand(email_config_path)
+        .map_err(|e| anyhow!("error reading {} {}", email_config_path, e))?;
+    serde_json::from_str(&contents).with_context(|| {
+        format!(
+            "send_email_notification: could not parse config {}",
+            email_config_path
+        )
+    })
+}
+
+pub fn send_email_notification(
+    dry_run: bool,
+    config: &EmailConfig,
+    subject: &str,
+    body: &str,
+) -> Result<()> {
+    if dry_run {
+        println!("dry-run: {}\n{}", subject, body);
+        return Ok(());
+    }
+
+    let email = Message::builder()
+        .from(
+            config
+                .from_address
+                .parse()
+                .with_context(|| "invalid from_address")?,
+        )
+        .to(config
+            .to_address
+            .parse()
+            .with_context(|| "invalid to_address")?)
+        .subject(subject)
+        .body(body.to_string())
+        .with_context(|| "failed to build email message")?;
+
+    let creds = Credentials::new(
+        config.gmail_username.clone(),
+        config.gmail_app_password.clone(),
+    );
+    let mailer = SmtpTransport::starttls_relay("smtp.gmail.com")
+        .unwrap()
+        .credentials(creds)
+        .port(587)
+        .build();
+
+    let result = mailer
+        .send(&email)
+        .map_err(|e| anyhow!("failed to send email: {}", e))?;
+
+    println!("SENT: email to {} {:?}", config.to_address, result);
+    Ok(())
+}
 
 #[derive(Debug, Deserialize)]
 pub struct PushoverConfig {
