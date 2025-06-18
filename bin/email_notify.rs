@@ -7,6 +7,7 @@ use iloveair::audit::read_to_string_with_shellexpand;
 use iloveair::notify::read_email_json;
 use iloveair::notify::send_email_notification;
 use iloveair::notify::EmailConfig;
+use iloveair::report::load_json_window_should_be_open;
 use std::fs;
 use std::io::Write;
 
@@ -28,7 +29,15 @@ fn main() {
                 .long("text-in")
                 .value_name("FILE")
                 .required(true)
-                .help("~/.cache/iloveair/Indoor.txt"),
+                .help("~/.cache/iloveair/report.txt"),
+        )
+        .arg(
+            Arg::new("json_in")
+                .short('j')
+                .long("json-in")
+                .value_name("FILE")
+                .required(true)
+                .help("~/.cache/iloveair/report.json"),
         )
         .arg(
             Arg::new("dry_run")
@@ -47,9 +56,13 @@ fn main() {
         // This else block is unreachable because the argument is required.
         unreachable!();
     };
+    let Some(json_in_path) = matches.get_one::<String>("json_in") else {
+        // This else block is unreachable because the argument is required.
+        unreachable!();
+    };
 
     let is_dry_run = matches.get_flag("dry_run");
-    match app_main(email_config_path, text_in_path, is_dry_run) {
+    match app_main(email_config_path, text_in_path, json_in_path, is_dry_run) {
         Ok(_) => (),
         Err(e) => println!("Error: {}", e),
     }
@@ -79,17 +92,31 @@ fn is_changed(text_in_path: &str, text_in: &String) -> Result<bool> {
     Ok(changed)
 }
 
-fn app_main(email_config_path: &String, text_in_path: &String, is_dry_run: bool) -> Result<()> {
+fn app_main(
+    email_config_path: &String,
+    text_in_path: &String,
+    json_in_path: &String,
+    is_dry_run: bool,
+) -> Result<()> {
     let email_config = read_email_json(email_config_path)?;
+    let json_window_should_be_open = load_json_window_should_be_open(&json_in_path)?;
     let text_in = read_to_string_with_shellexpand(text_in_path)
         .with_context(|| anyhow!("could not read {}", text_in_path))?;
-    let is_changed = is_changed(text_in_path, &text_in).with_context(|| anyhow!("error checking checksum"))?;
+    let is_changed =
+        is_changed(text_in_path, &text_in).with_context(|| anyhow!("error checking checksum"))?;
     if is_changed {
         // subject is: Open Windows: <date>
-        let subject = format!(
-            "Open Windows: {}",
-            chrono::Local::now().format("%Y-%m-%d %H:%M")
-        );
+        let subject = if json_window_should_be_open {
+            format!(
+                "Open Windows: {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M")
+            )
+        } else {
+            format!(
+                "Close Windows: {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M")
+            )
+        };
         notify_email(&email_config, is_dry_run, &subject, &text_in)?;
     }
     Ok(())

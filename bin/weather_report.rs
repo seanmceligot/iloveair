@@ -6,24 +6,16 @@ use iloveair::airthings_radon::celsius_to_fahrenheit;
 use iloveair::airthings_radon::Indoor;
 use iloveair::audit::read_to_string_with_shellexpand;
 use iloveair::pretty::PrettyBool;
+use iloveair::report::save_json_report;
 use iloveair::weather::{load_weather_response, weather_humidity, weather_tempurature};
+use iloveair::HumidityTemp;
+use iloveair::IndoorSettings;
 use std::fs::OpenOptions;
 use std::io::Write;
 
 static DOWN: &str = "↓";
 static UP: &str = "↗";
 static EQ: &str = "=";
-
-struct IndoorSettings {
-    max_humidity: u64,
-    min_temp: f64,
-    max_temp: f64,
-}
-#[derive(Clone, Debug)]
-struct HumidityTemp {
-    humidity: u64,
-    temp: f64,
-}
 
 fn read_indoor_json(indoor_cache_path: &String) -> Result<HumidityTemp> {
     let contents = read_to_string_with_shellexpand(indoor_cache_path).with_context(|| {
@@ -94,7 +86,7 @@ fn main() {
                 .long("text-out")
                 .value_name("FILE")
                 .required(true)
-                .help("~/.cache/iloveair/Indoor.txt"),
+                .help("~/.cache/iloveair/report.txt"),
         )
         .arg(
             Arg::new("max_temp")
@@ -103,6 +95,15 @@ fn main() {
                 .value_name("VALUE")
                 .default_value("84.0")
                 .help("Maximum allowable temperature"),
+        )
+        // json_out_path
+        .arg(
+            Arg::new("json_out_path")
+                .short('j')
+                .long("json-out")
+                .value_name("FILE")
+                .required(true)
+                .help("~/.cache/iloveair/report.json"),
         );
     let matches = command.get_matches();
 
@@ -136,6 +137,10 @@ fn main() {
         min_temp: *min_temp,
         max_temp: *max_temp,
     };
+    let Some(json_out_path) = matches.get_one::<String>("json_out_path") else {
+        // This else block is unreachable because of the default value.
+        unreachable!();
+    };
     let is_dry_run = matches.get_flag("dry_run");
     match app_main(
         weather_cache_path,
@@ -143,6 +148,7 @@ fn main() {
         is_dry_run,
         indoor_settings,
         text_out_path,
+        json_out_path,
     ) {
         Ok(_) => (),
         Err(e) => println!("Error: {}", e),
@@ -154,6 +160,7 @@ fn app_main(
     is_dry_run: bool,
     indoor_settings: IndoorSettings,
     text_out_path: &String,
+    json_out_path: &String,
 ) -> Result<()> {
     let indoor = read_indoor_json(indoor_cache_path)?;
     let weather_json = load_weather_response(weather_json_path).with_context(|| {
@@ -196,6 +203,17 @@ fn app_main(
         text_out_path,
         is_dry_run,
     );
+    save_json_report(
+        indoor.clone(),
+        outdoor.clone(),
+        can_let_in_humidify,
+        humidity_diff,
+        can_let_in_temperature,
+        temp_diff,
+        window_should_be_open,
+        json_out_path,
+        is_dry_run,
+    )?;
     Ok(())
 }
 fn updown<T: PartialOrd + ToString>(fst: T, snd: T) -> String {

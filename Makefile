@@ -44,10 +44,11 @@ hourly:
 	./hourly.sh
 
 install_service:
-	systemctl --user enable --now systemd/iloveair.service 
-	systemctl --user enable --now systemd/iloveair.timer
-	systemctl --user enable --now systemd/rain.service 
-	systemctl --user enable --now systemd/rain.timer
+	cp -v systemd/iloveair.service systemd/iloveair.timer ~/.config/systemd/user/
+	#systemctl --user enable --now systemd/iloveair.service 
+	#systemctl --user enable --now systemd/iloveair.timer
+	#systemctl --user enable --now systemd/rain.service 
+	#systemctl --user enable --now systemd/rain.timer
 	systemctl --user daemon-reload
 
 journalctl:
